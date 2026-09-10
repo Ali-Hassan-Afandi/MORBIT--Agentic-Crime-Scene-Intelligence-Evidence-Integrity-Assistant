@@ -1,0 +1,6 @@
+PFSA FORENSIC TOXICOLOGY ANALYSIS REQUEST FORM — PUBLIC COPY REFERENCE
+Public copy: https://www.scribd.com/document/877991835/PFSA-Tox-Form
+Form identifier visible in public copy: TQA/WS/L4/025, issue 23-04-2019, revision 1.0.
+VERIFICATION: Public copy; recheck against current PFSA controlled form before operational use.
+
+The public form requests victim/deceased details, incident/admission/expiration information, MLC/PMR information, medication/unusual findings, specimen details, requested toxicological testing, requesting hospital/agency and MLO information. It contains specimen-specific preservation and quantity instructions. SceneGuard should treat those details as historically/publicly available reference guidance unless verified against a current controlled PFSA form.

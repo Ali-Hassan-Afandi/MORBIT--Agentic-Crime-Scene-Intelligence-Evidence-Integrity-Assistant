@@ -1,0 +1,6 @@
+PFSA CASE SUBMISSION FORM — PUBLIC COPY REFERENCE
+Public copy: https://www.scribd.com/document/849840706/Evidence-Submission-Form
+Form identifier visible in public copy: Evidence Receiving Unit (ERU), SOP/WS/L4/008, PFSA Case Submission Form, issue 22-01-2021, revision 1.3.
+VERIFICATION: Public copy; recheck against live PFSA official site before operational use.
+
+The form includes PFSA case/linkage fields, FIR/letter and road-certificate details; requested forensic discipline; description of evidence and test required; submitting agency and address; district/province; investigation officer and submitter details; seal status; receiving information; storage/transfer information and evidence-receiving-unit fields.

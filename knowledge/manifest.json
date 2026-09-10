@@ -1,0 +1,87 @@
+{
+  "project": "SceneGuard AI",
+  "version": "3.0",
+  "generated_note": "Curated hackathon knowledge manifest. NFA entries point to live official sources. PFSA entries distinguish official government references from public mirrors because the PFSA public site was unavailable during verification.",
+  "sources": [
+    {
+      "source_id": "NFA_PUBLIC_SOP",
+      "agency": "NFA",
+      "title": "Public SOP — National Forensics Agency",
+      "authority": "National Forensics Agency, Pakistan",
+      "document_type": "SOP",
+      "verification": "official-live",
+      "url": "https://nfa.gov.pk/downloads/PUBLIC%20SOP%20National%20Forensics%20Agency.pdf",
+      "file": "NFA/nfa_public_sop_reference.txt"
+    },
+    {
+      "source_id": "NFA_GUIDELINES",
+      "agency": "NFA",
+      "title": "Evidence Collection, Packaging and Submission Guidelines",
+      "authority": "National Forensics Agency, Pakistan",
+      "document_type": "Guidelines",
+      "verification": "official-live",
+      "url": "https://www.nfa.gov.pk/Guidelines/",
+      "file": "NFA/nfa_guidelines_reference.txt"
+    },
+    {
+      "source_id": "NFA_DOWNLOADS",
+      "agency": "NFA",
+      "title": "NFA Downloads — SOPs, Forms and Fee Structure",
+      "authority": "National Forensics Agency, Pakistan",
+      "document_type": "Source index",
+      "verification": "official-live",
+      "url": "https://nfa.gov.pk/downloads/",
+      "file": "NFA/nfa_downloads_index.txt"
+    },
+    {
+      "source_id": "PFSA_GUIDELINES_PUBLIC",
+      "agency": "PFSA",
+      "title": "PFSA Public Evidence Collection/Packaging Guidance — reference summary",
+      "authority": "Punjab Forensic Science Agency / publicly attributable PFSA material",
+      "document_type": "Guidance reference",
+      "verification": "public-copy-needs-official-site-recheck",
+      "url": "https://www.scribd.com/document/344383168/p-Fsa-Guidelines-English",
+      "file": "PFSA/pfsa_guidelines_reference.txt"
+    },
+    {
+      "source_id": "PFSA_CASE_FORM",
+      "agency": "PFSA",
+      "title": "PFSA Case Submission Form — public copy reference",
+      "authority": "Punjab Forensic Science Agency",
+      "document_type": "Submission form",
+      "verification": "public-copy-needs-official-site-recheck",
+      "url": "https://www.scribd.com/document/849840706/Evidence-Submission-Form",
+      "file": "PFSA/pfsa_case_submission_form_reference.txt"
+    },
+    {
+      "source_id": "PFSA_TOX_FORM",
+      "agency": "PFSA",
+      "title": "PFSA Forensic Toxicology Analysis Request Form — public copy reference",
+      "authority": "Punjab Forensic Science Agency",
+      "document_type": "Request form",
+      "verification": "public-copy-needs-official-site-recheck",
+      "url": "https://www.scribd.com/document/877991835/PFSA-Tox-Form",
+      "file": "PFSA/pfsa_toxicology_reference.txt"
+    },
+    {
+      "source_id": "PFSA_FEE_PAYMENT_NOTICE_2022",
+      "agency": "PFSA",
+      "title": "PFSA Notice — Payment of Forensic Analysis Fee through Bank Draft/Pay Order",
+      "authority": "Punjab Forensic Science Agency, Home Department",
+      "document_type": "Fee payment notice",
+      "verification": "government-recipient-hosted-copy",
+      "url": "https://districtcourtwest.gos.pk/Tender%202021/Payment%20of%20forensic.pdf",
+      "file": "PFSA/pfsa_fee_payment_reference.txt"
+    },
+    {
+      "source_id": "PFSA_OFFICIAL_SITE",
+      "agency": "PFSA",
+      "title": "PFSA official website entry",
+      "authority": "Government of Punjab",
+      "document_type": "Official-site reference",
+      "verification": "official-government-directory",
+      "url": "https://pfsa.punjab.gov.pk/",
+      "file": "PFSA/pfsa_official_site_reference.txt"
+    }
+  ]
+}

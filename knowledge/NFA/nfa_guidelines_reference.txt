@@ -1,0 +1,5 @@
+SOURCE: NFA Evidence Collection, Packaging and Submission Guidelines
+OFFICIAL URL: https://www.nfa.gov.pk/Guidelines/
+STATUS: Official live NFA webpage verified in September 2026.
+
+The NFA page provides discipline-specific evidence collection, preservation, packaging, transportation and case-submission guidance. Public guidance covers digital evidence, latent fingerprints, firearms/toolmarks, questioned documents, explosives/trace material, toxicology and biological evidence. General themes include documentation before packaging, suitable sealed containers, contamination prevention, evidence labeling, preservation of original digital formats, anti-static protection for digital media, appropriate breathable packaging for many biological exhibits, safe handling of sharp items, and maintaining chain-of-custody information.

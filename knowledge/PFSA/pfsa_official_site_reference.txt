@@ -1,0 +1,6 @@
+PFSA OFFICIAL-SITE REFERENCE
+Government of Punjab administrative directory lists Punjab Forensic Science Agency at:
+https://pfsa.punjab.gov.pk/
+Punjab Portal directory: https://punjab.gov.pk/administrative-departments
+
+During September 2026 verification the PFSA website itself returned an upstream error to automated access. Therefore SceneGuard V3 marks PFSA mirror/reference material separately from live official NFA material.

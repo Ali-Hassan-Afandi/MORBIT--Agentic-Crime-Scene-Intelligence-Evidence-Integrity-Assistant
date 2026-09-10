@@ -1,0 +1,5 @@
+SOURCE: Public SOP — National Forensics Agency, Pakistan
+OFFICIAL URL: https://nfa.gov.pk/downloads/PUBLIC%20SOP%20National%20Forensics%20Agency.pdf
+STATUS: Official live NFA source verified in September 2026.
+
+Publicly described provisions include scene security, restriction of unauthorized access, careful handling of devices, documentation of powered state, photography, anti-static precautions, preservation of computers/mobile phones/storage devices/DVR-NVR systems, labeling and sealing, chain-of-custody documentation, secure packaging and transport, and supporting submission documentation. SceneGuard should use the actual PDF downloaded from the official URL whenever available; this reference text exists so the demo can still build a source-aware index if a remote download is unavailable.
