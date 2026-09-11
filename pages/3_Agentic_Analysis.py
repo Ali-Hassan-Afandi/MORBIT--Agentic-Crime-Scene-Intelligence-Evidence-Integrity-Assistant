@@ -1,7 +1,7 @@
 import streamlit as st
 from core import (
     init_state, client_from_secrets, knowledge_fingerprint, load_rag,
-    scene_agent, retrieve_guidance, evidence_dataframe
+    scene_agent, retrieve_guidance, evidence_dataframe, sync_map_items_with_evidence
 )
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
@@ -29,7 +29,9 @@ if st.button("Refresh MORBIT Analysis with Verified Visuals",type="primary",use_
     st.session_state.guidance=guidance
     st.session_state.sources=sources
     st.session_state.evidence_df=evidence_dataframe(analysis)
-    st.success("Analysis refreshed.")
+    st.session_state.map_items=sync_map_items_with_evidence(st.session_state.map_items, st.session_state.evidence_df)
+    st.session_state.scene_map_png=None
+    st.success("Analysis refreshed. The site-plan table has also been synchronized with the latest evidence list.")
 
 if st.session_state.scene_analysis:
     a=st.session_state.scene_analysis

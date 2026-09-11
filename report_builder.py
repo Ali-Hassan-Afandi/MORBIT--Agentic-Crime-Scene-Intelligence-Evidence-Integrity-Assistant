@@ -48,7 +48,7 @@ def build_rich_report(
     case: dict[str,Any], analysis: dict[str,Any] | None, guidance: str, sources: list[dict],
     evidence_df: pd.DataFrame | None, integrity_score: int, integrity_alerts: list[str],
     vision_records: list[dict], verified_visuals: list[str], search_plan: dict[str,Any] | None,
-    investigator_notes: str, scene_map_png: bytes | None=None
+    investigator_notes: str, scene_map_png: bytes | None=None, map_items: pd.DataFrame | None=None
 ) -> bytes:
     doc=Document()
     sec=doc.sections[0]
@@ -162,6 +162,17 @@ def build_rich_report(
         doc.add_paragraph("No search-method recommendation generated.")
 
     _heading(doc,"7. Scene of Crime Map",1)
+    if map_items is not None and not map_items.empty:
+        _heading(doc,"Site-Plan Evidence Coordinates",2)
+        map_cols=[c for c in ["Evidence ID","Evidence Item","Category","X","Y","Notes"] if c in map_items.columns]
+        mt=doc.add_table(rows=1,cols=len(map_cols)); mt.style="Table Grid"
+        for j,cname in enumerate(map_cols):
+            _cell(mt.cell(0,j),cname,True,WHITE,7.5); _shade(mt.cell(0,j),BLUE)
+        for _,row in map_items.iterrows():
+            cells=mt.add_row().cells
+            for j,cname in enumerate(map_cols):
+                _cell(cells[j],row.get(cname,""),size=7.5)
+
     if scene_map_png:
         p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
         p.add_run().add_picture(io.BytesIO(scene_map_png),width=Inches(6.7))

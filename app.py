@@ -1,16 +1,14 @@
 import streamlit as st
-import pandas as pd
 
 from core import (
-    APP_NAME, APP_VERSION, EMBED_MODEL, TEXT_MODEL, VISION_MODEL,
-    SCENE_TYPES, init_state, reset_case_state, client_from_secrets,
-    scene_agent, retrieve_guidance, evidence_dataframe,
+    APP_NAME, EMBED_MODEL, TEXT_MODEL, VISION_MODEL,
+    SCENE_TYPES, init_state, reset_case_state, clear_analysis_keep_intake,
+    client_from_secrets, scene_agent, retrieve_guidance, evidence_dataframe,
     recommend_search_method, knowledge_fingerprint, load_rag,
-    knowledge_inventory, workflow_status
+    knowledge_inventory, workflow_status, sync_map_items_with_evidence
 )
 from vision_agent import analyze_image, image_metadata
 from ui import apply_ui, hero, render_workflow
-from scene_map import generate_scene_map
 
 st.set_page_config(
     page_title=APP_NAME,
@@ -23,22 +21,25 @@ init_state()
 
 hero(
     "Command Dashboard",
-    "Enter the complete scene intake here, upload images, start the first analysis, "
-    "then follow the guided workflow to verification, mapping, evidence integrity and the final Word report."
+    "Enter the complete case once, analyze up to two scene photographs, and let MORBIT guide the investigator "
+    "through verification, search planning, site mapping, evidence integrity and final Word reporting."
 )
 
-st.warning(
-    "Use fictional, training or properly authorized case data only. "
-    "AI observations are not laboratory findings and require investigator verification."
+st.markdown(
+    """<div class="safety-card">
+    <b>Hackathon testing mode:</b> use fictional, training or properly authorized case data only.
+    AI observations are not laboratory findings and require investigator verification.
+    </div>""",
+    unsafe_allow_html=True,
 )
 
 # ------------------------------------------------------------
-# Dashboard status
+# Dashboard overview
 # ------------------------------------------------------------
 a,b,c,d = st.columns(4)
 a.metric("Case", st.session_state.case_id)
-b.metric("Images", len(st.session_state.vision_records))
-c.metric("Evidence items", len(st.session_state.evidence_df) if st.session_state.evidence_df is not None else 0)
+b.metric("Photos analyzed", f"{len(st.session_state.vision_records)}/2")
+c.metric("Potential evidence", len(st.session_state.evidence_df) if st.session_state.evidence_df is not None else 0)
 d.metric("Workflow", f"{sum(1 for x in workflow_status() if x['done'])}/6")
 
 render_workflow(active_step=st.session_state.current_step)
@@ -46,10 +47,53 @@ render_workflow(active_step=st.session_state.current_step)
 st.divider()
 
 # ------------------------------------------------------------
-# SINGLE-PAGE MASTER INTAKE
+# CASE CORRECTION / CLEAR CONTROLS
+# ------------------------------------------------------------
+st.markdown("## Case Controls")
+cc1, cc2 = st.columns(2)
+
+with cc1:
+    if st.button(
+        "♻️ Retake / Correct This Case",
+        use_container_width=True,
+        help="Keeps your intake details but clears AI results so you can correct inputs and run the case again.",
+    ):
+        clear_analysis_keep_intake()
+        st.success("Analysis cleared. Your case intake is preserved below for correction and re-analysis.")
+        st.rerun()
+
+with cc2:
+    if st.button(
+        "🗑️ Clear Entire Case",
+        use_container_width=True,
+        help="Starts a completely new case. A confirmation step appears first.",
+    ):
+        st.session_state["confirm_full_clear"] = True
+
+if st.session_state.get("confirm_full_clear", False):
+    st.warning("This will erase the current intake, images, analysis, map, evidence table and report from this session.")
+    x1,x2 = st.columns(2)
+    if x1.button("Yes — Clear Everything", type="primary", use_container_width=True):
+        st.session_state.pop("confirm_full_clear", None)
+        reset_case_state()
+        st.rerun()
+    if x2.button("Cancel", use_container_width=True):
+        st.session_state["confirm_full_clear"] = False
+        st.rerun()
+
+st.divider()
+
+# ------------------------------------------------------------
+# MASTER INTAKE
 # ------------------------------------------------------------
 st.markdown("## 1. Complete Case Intake")
-st.caption("A new user can enter everything required for the first analysis without leaving this page.")
+st.markdown(
+    """<div class="input-banner">
+    <b>New-user starting point:</b> fill in the case details, upload zero to two photos, and press
+    <b>Save Intake & Start Analysis</b>. Everything required for the first MORBIT analysis is collected here.
+    </div>""",
+    unsafe_allow_html=True,
+)
 
 with st.form("master_intake_form"):
     r1c1,r1c2,r1c3 = st.columns(3)
@@ -61,7 +105,7 @@ with st.form("master_intake_form"):
     )
     scene_dt = r1c3.text_input("Date / Time", value=st.session_state.scene_dt)
 
-    custom_scene = ""
+    custom_scene = st.session_state.custom_scene_type
     if scene_type == "Other / Custom":
         custom_scene = st.text_input(
             "Custom scene type",
@@ -127,12 +171,12 @@ with st.form("master_intake_form"):
         placeholder="Example: What packaging, submission and chain-of-custody considerations are relevant?",
     )
 
-    st.markdown("#### Scene images")
+    st.markdown("#### Scene photographs — Hackathon limit: maximum 2")
     uploads = st.file_uploader(
-        "Upload up to 8 JPG/JPEG/PNG images",
+        "Upload JPG/JPEG/PNG scene photographs",
         type=["jpg","jpeg","png"],
         accept_multiple_files=True,
-        help="Images are analyzed when you press Start Analysis and preserved for the final Word report.",
+        help="For this hackathon version, MORBIT accepts a maximum of two scene photos per analysis.",
     )
 
     start = st.form_submit_button(
@@ -140,6 +184,9 @@ with st.form("master_intake_form"):
         type="primary",
         use_container_width=True,
     )
+
+if uploads and len(uploads) > 2:
+    st.error("Hackathon testing limit exceeded: please keep only 2 photographs before starting analysis.")
 
 if start:
     st.session_state.case_id = case_id.strip()
@@ -157,20 +204,32 @@ if start:
     st.session_state.analysis_started = True
     st.session_state.analysis_complete = False
     st.session_state.analysis_errors = []
+    st.session_state.report_docx = None
+    st.session_state.scene_map_png = None
 
+    validation_errors = []
+    if not st.session_state.case_id:
+        validation_errors.append("Case ID is required.")
     if not st.session_state.desc:
-        st.error("Please enter a factual scene description before starting analysis.")
+        validation_errors.append("A factual scene description is required.")
+    if scene_type == "Other / Custom" and not st.session_state.custom_scene_type:
+        validation_errors.append("Please enter the custom scene type.")
+    if uploads and len(uploads) > 2:
+        validation_errors.append("Only two photographs are permitted in hackathon testing mode.")
+
+    if validation_errors:
+        for msg in validation_errors:
+            st.error(msg)
     else:
         client = client_from_secrets()
 
-        # A. image analysis
+        # A. image analysis — hard limit of two
         records = []
         if uploads:
-            use_uploads = uploads[:8]
-            for idx, up in enumerate(use_uploads, start=1):
+            for idx, up in enumerate(uploads, start=1):
                 try:
                     data = up.getvalue()
-                    with st.spinner(f"Step A/4 — Analyzing image {idx}/{len(use_uploads)}: {up.name}"):
+                    with st.spinner(f"Step A/4 — Analyzing photograph {idx}/{len(uploads)}: {up.name}"):
                         meta = image_metadata(data, up.name)
                         visual = analyze_image(client, data, up.name, st.session_state.desc)
                     records.append({
@@ -202,6 +261,11 @@ if start:
                 )
             st.session_state.scene_analysis = analysis
             st.session_state.evidence_df = evidence_dataframe(analysis)
+            # Automatically build the site-plan evidence table from all identified evidence.
+            st.session_state.map_items = sync_map_items_with_evidence(
+                st.session_state.map_items,
+                st.session_state.evidence_df,
+            )
         except Exception as exc:
             st.session_state.analysis_errors.append(f"Scene agent: {exc}")
 
@@ -247,12 +311,12 @@ if start:
             for err in st.session_state.analysis_errors:
                 st.write("•", err)
         if st.session_state.analysis_complete:
-            st.success("Initial MORBIT analysis completed. Follow the guided next step below.")
+            st.success("Initial MORBIT analysis completed. All detected potential evidence is now preloaded into the Scene of Crime site-plan table.")
 
 st.divider()
 
 # ------------------------------------------------------------
-# ANALYSIS SUMMARY + GUIDED NEXT STEP
+# GUIDED NEXT STEP
 # ------------------------------------------------------------
 st.markdown("## 2. Analysis Status & Guided Next Step")
 
@@ -260,7 +324,7 @@ if not st.session_state.analysis_started:
     st.info("Complete the intake above and press **Save Intake & Start Analysis**.")
 else:
     c1,c2,c3 = st.columns(3)
-    c1.metric("Images analyzed", len(st.session_state.vision_records))
+    c1.metric("Photos analyzed", f"{len(st.session_state.vision_records)}/2")
     c2.metric("Potential evidence", len(st.session_state.evidence_df) if st.session_state.evidence_df is not None else 0)
     c3.metric("Sources retrieved", len(st.session_state.sources))
 
@@ -273,52 +337,50 @@ else:
         st.success(st.session_state.search_plan["recommended"])
         st.caption(st.session_state.search_plan["rationale"])
 
-    st.markdown("### What should the user do next?")
+    st.markdown("### What should the investigator do next?")
 
     if st.session_state.vision_records and not st.session_state.verified_visuals:
         st.markdown(
             """<div class="next-card"><b>Next: Visual Intelligence</b><br>
-            Review every uploaded image and decide which AI-proposed visual observations you accept as investigator-verified.
-            Only verified observations should be promoted as confirmed scene context.</div>""",
+            Review the two-photo maximum image analysis and mark only observations you personally verify.
+            Then refresh the agentic analysis using those verified observations.</div>""",
             unsafe_allow_html=True,
         )
-        st.page_link("pages/2_Visual_Intelligence.py", label="➡️ Continue to Visual Verification", icon="📷")
+        st.page_link("pages/2_Visual_Intelligence.py", label="Continue to Visual Verification", icon="📷")
     elif not st.session_state.scene_analysis:
-        st.error("Scene analysis has not completed. Review any errors above and run the analysis again.")
+        st.error("Scene analysis has not completed. Review errors above and run the case again.")
     elif st.session_state.scene_map_png is None:
         st.markdown(
             """<div class="next-card"><b>Next: Search Strategy & Scene Map</b><br>
-            Confirm the recommended search method and build a north-up scene map using investigator-entered coordinates.</div>""",
+            All potential evidence is already listed for you. Enter only X/Y coordinates and notes,
+            then generate the north-up site plan.</div>""",
             unsafe_allow_html=True,
         )
-        st.page_link("pages/4_Search_and_Scene_Map.py", label="➡️ Continue to Search & Scene Map", icon="🧭")
+        st.page_link("pages/4_Search_and_Scene_Map.py", label="Continue to Search & Scene Map", icon="🧭")
     elif st.session_state.evidence_df is not None and not st.session_state.evidence_df.empty:
         st.markdown(
             """<div class="next-card"><b>Next: Evidence Integrity</b><br>
-            Review each evidence record and complete photography, collector, packaging, seal and custody fields.</div>""",
+            Review evidence documentation completeness before generating the final report.</div>""",
             unsafe_allow_html=True,
         )
-        st.page_link("pages/5_Evidence_Integrity.py", label="➡️ Continue to Evidence Integrity", icon="🔐")
+        st.page_link("pages/5_Evidence_Integrity.py", label="Continue to Evidence Integrity", icon="🔐")
     else:
-        st.page_link("pages/6_Rich_Report.py", label="➡️ Generate Final Rich Word Report", icon="📄")
+        st.page_link("pages/6_Rich_Report.py", label="Generate Final Rich Word Report", icon="📄")
 
 st.divider()
 
-# ------------------------------------------------------------
-# PAGE DIRECTORY
-# ------------------------------------------------------------
 st.markdown("## 3. Full Workflow")
 p1,p2,p3 = st.columns(3)
 with p1:
     st.page_link("pages/1_Scene_Intake.py", label="Scene Intake", icon="📋")
-    st.caption("Edit or refine case details.")
+    st.caption("Review or refine case details.")
     st.page_link("pages/2_Visual_Intelligence.py", label="Visual Intelligence", icon="📷")
-    st.caption("Verify image observations.")
+    st.caption("Verify observations from up to two photos.")
 with p2:
     st.page_link("pages/3_Agentic_Analysis.py", label="Agentic Analysis", icon="🧠")
-    st.caption("Review multimodal analysis and RAG guidance.")
+    st.caption("Refresh analysis after visual verification.")
     st.page_link("pages/4_Search_and_Scene_Map.py", label="Search & Scene Map", icon="🧭")
-    st.caption("Confirm search strategy and map the scene.")
+    st.caption("Coordinates + notes only; evidence rows are automatic.")
 with p3:
     st.page_link("pages/5_Evidence_Integrity.py", label="Evidence Integrity", icon="🔐")
     st.caption("Track documentation completeness.")
@@ -326,10 +388,13 @@ with p3:
     st.caption("Generate the final formatted DOCX.")
 
 with st.sidebar:
-    st.markdown("### MORBIT Command")
-    st.caption("The main page is now the starting point for all new users.")
-    if st.button("Reset current case", use_container_width=True):
-        reset_case_state()
+    st.markdown("### 🎛️ MORBIT Controls")
+    st.caption("Main dashboard = single starting point for a new investigator.")
+    if st.button("♻️ Retake Case", use_container_width=True):
+        clear_analysis_keep_intake()
+        st.rerun()
+    if st.button("🗑️ Clear Case", use_container_width=True):
+        st.session_state["confirm_full_clear"] = True
         st.rerun()
 
     inventory = knowledge_inventory("knowledge")

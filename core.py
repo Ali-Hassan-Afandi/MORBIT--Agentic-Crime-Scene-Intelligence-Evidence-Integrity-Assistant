@@ -230,7 +230,7 @@ def init_state() -> None:
         "evidence_df": pd.DataFrame(),
         "search_plan": None,
         "scene_map_png": None,
-        "map_items": pd.DataFrame(columns=["Label", "Type", "X", "Y", "Notes"]),
+        "map_items": pd.DataFrame(columns=["Evidence ID", "Evidence Item", "Category", "X", "Y", "Notes"]),
         "report_docx": None,
         "investigator_notes": "",
         "analysis_started": False,
@@ -405,6 +405,82 @@ def evidence_dataframe(analysis: dict) -> pd.DataFrame:
             "Custody Started": False,
         })
     return pd.DataFrame(rows)
+
+
+
+def evidence_to_map_items(evidence_df: pd.DataFrame | None) -> pd.DataFrame:
+    """
+    Build the Scene of Crime site-plan table automatically from all potential
+    evidence identified by MORBIT. Investigator-editable fields are only X, Y
+    and Notes. Evidence identity fields remain system-generated.
+    """
+    columns = ["Evidence ID", "Evidence Item", "Category", "X", "Y", "Notes"]
+    if evidence_df is None or evidence_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    rows = []
+    for _, row in evidence_df.iterrows():
+        rows.append({
+            "Evidence ID": str(row.get("Evidence ID", "") or ""),
+            "Evidence Item": str(row.get("Item", "") or ""),
+            "Category": str(row.get("Category", "") or ""),
+            "X": None,
+            "Y": None,
+            "Notes": "",
+        })
+    return pd.DataFrame(rows, columns=columns)
+
+
+def sync_map_items_with_evidence(
+    existing_map: pd.DataFrame | None,
+    evidence_df: pd.DataFrame | None,
+) -> pd.DataFrame:
+    """
+    Refresh map rows from the current evidence inventory while preserving any
+    investigator-entered coordinates/notes for evidence IDs that still exist.
+    """
+    fresh = evidence_to_map_items(evidence_df)
+    if fresh.empty:
+        return fresh
+    if existing_map is None or existing_map.empty or "Evidence ID" not in existing_map.columns:
+        return fresh
+
+    old = existing_map.copy()
+    keep_cols = [c for c in ["Evidence ID", "X", "Y", "Notes"] if c in old.columns]
+    old = old[keep_cols].drop_duplicates(subset=["Evidence ID"], keep="last")
+
+    merged = fresh.merge(old, on="Evidence ID", how="left", suffixes=("", "_old"))
+    for field in ["X", "Y", "Notes"]:
+        old_field = f"{field}_old"
+        if old_field in merged.columns:
+            merged[field] = merged[old_field].where(merged[old_field].notna(), merged[field])
+            merged.drop(columns=[old_field], inplace=True)
+
+    return merged[["Evidence ID", "Evidence Item", "Category", "X", "Y", "Notes"]]
+
+
+def clear_analysis_keep_intake() -> None:
+    """
+    Retake/re-run mode: preserve case intake fields so the investigator can
+    correct them, but clear all derived AI outputs and downstream records.
+    """
+    for key, value in {
+        "vision_records": [],
+        "verified_visuals": [],
+        "scene_analysis": None,
+        "guidance": "",
+        "sources": [],
+        "evidence_df": pd.DataFrame(),
+        "search_plan": None,
+        "scene_map_png": None,
+        "map_items": pd.DataFrame(columns=["Evidence ID", "Evidence Item", "Category", "X", "Y", "Notes"]),
+        "report_docx": None,
+        "analysis_started": False,
+        "analysis_complete": False,
+        "current_step": 1,
+        "analysis_errors": [],
+    }.items():
+        st.session_state[key] = value
 
 
 def integrity_score(df: pd.DataFrame) -> tuple[int, list[str]]:

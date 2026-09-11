@@ -40,6 +40,7 @@ if st.button("Generate Final MORBIT Word Report (.docx)",type="primary",use_cont
             search_plan=st.session_state.search_plan,
             investigator_notes=st.session_state.investigator_notes,
             scene_map_png=st.session_state.scene_map_png,
+            map_items=st.session_state.map_items,
         )
     st.success("Final report generated.")
 
