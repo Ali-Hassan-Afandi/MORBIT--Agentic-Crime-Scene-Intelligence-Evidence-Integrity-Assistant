@@ -20,11 +20,9 @@ from vision_agent import VISION_MODEL
 
 APP_NAME = "MORBIT — Agentic Crime Scene Intelligence & Evidence Integrity Assistant"
 APP_SHORT = "MORBIT CSI"
-APP_VERSION = "v4"
+APP_VERSION = "v5"
 TEXT_MODEL = "openai/gpt-oss-20b"
 
-# A practical, broad crime-scene taxonomy. No finite list can cover every possible
-# incident, therefore "Other / Custom" is always retained.
 SCENE_TYPE_GROUPS = {
     "Crimes Against Persons": [
         "Homicide / Suspicious Death",
@@ -120,18 +118,17 @@ SCENE_TYPE_GROUPS = {
         "Other / Custom",
     ],
 }
-
 SCENE_TYPES = [item for group in SCENE_TYPE_GROUPS.values() for item in group]
 
 SEARCH_METHODS = {
     "Zone / Quadrant": {
         "best_for": "Buildings, rooms, vehicles, complex or compartmentalized scenes.",
         "description": "Divide the scene into defined zones and search each zone systematically.",
-        "strength": "Excellent accountability and team assignment; adapts well to complex scenes.",
+        "strength": "Strong accountability, team assignment and adaptation to complex scenes.",
     },
     "Grid": {
-        "best_for": "Large open areas where a very thorough search is needed.",
-        "description": "Conduct a line/strip search in one direction, then repeat at approximately 90 degrees.",
+        "best_for": "Large open areas requiring high search thoroughness.",
+        "description": "Conduct a line/strip search, then repeat at approximately 90 degrees.",
         "strength": "High coverage and useful for small or easily missed evidence.",
     },
     "Line / Strip": {
@@ -147,17 +144,17 @@ SEARCH_METHODS = {
     "Wheel / Ray": {
         "best_for": "Small circular scenes with a meaningful central point.",
         "description": "Search along radial lines extending from or toward the center.",
-        "strength": "Can relate evidence to a central event point, but leaves gaps between rays.",
+        "strength": "Relates evidence to a central event point, but gaps can remain between rays.",
     },
     "Point-to-Point / Link": {
         "best_for": "Compact scenes where visible evidence or event relationships guide progression.",
         "description": "Move methodically between related points or items while documenting transitions.",
-        "strength": "Flexible for reconstructive documentation; should not replace systematic coverage where completeness is required.",
+        "strength": "Flexible for reconstructive documentation; not a substitute for systematic coverage when completeness is required.",
     },
     "Lane / Vehicle": {
         "best_for": "Vehicles, roadway segments and long narrow transport scenes.",
         "description": "Divide the vehicle or roadway into lanes/sections and search each in sequence.",
-        "strength": "Matches the geometry of transport scenes and supports clear location recording.",
+        "strength": "Matches transport-scene geometry and supports clear location recording.",
     },
     "Underwater / Sector": {
         "best_for": "Submerged or shoreline scenes handled by trained specialist teams.",
@@ -215,6 +212,7 @@ def init_state() -> None:
     defaults = {
         "case_id": "MORBIT-DEMO-001",
         "scene_type": "Burglary / Housebreaking",
+        "custom_scene_type": "",
         "scene_dt": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "location": "",
         "desc": "",
@@ -222,6 +220,8 @@ def init_state() -> None:
         "scene_size": "Medium",
         "personnel_count": 2,
         "obstacle_level": "Moderate",
+        "agency": "BOTH",
+        "investigator_question": "",
         "vision_records": [],
         "verified_visuals": [],
         "scene_analysis": None,
@@ -231,10 +231,12 @@ def init_state() -> None:
         "search_plan": None,
         "scene_map_png": None,
         "map_items": pd.DataFrame(columns=["Label", "Type", "X", "Y", "Notes"]),
-        "report_text": "",
         "report_docx": None,
         "investigator_notes": "",
-        "agency": "BOTH",
+        "analysis_started": False,
+        "analysis_complete": False,
+        "current_step": 1,
+        "analysis_errors": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -254,11 +256,10 @@ def vision_context(records: list[dict], verified: list[str]) -> str:
     for rec in records:
         meta = rec.get("metadata", {})
         analysis = rec.get("analysis", {})
-        observations = analysis.get("potential_observations", [])
         blocks.append(
             f"{rec.get('image_id','IMG')} / {meta.get('filename','image')}: "
             f"AI summary={analysis.get('image_summary','')}; "
-            f"AI proposed observations={json.dumps(observations, ensure_ascii=False)}"
+            f"AI proposed observations={json.dumps(analysis.get('potential_observations', []), ensure_ascii=False)}"
         )
     return (
         "\n".join(blocks)
@@ -276,18 +277,19 @@ def scene_agent(
 ) -> dict:
     vision_records = vision_records or []
     verified_visuals = verified_visuals or []
+
     system = """
 You are MORBIT's Scene Analysis Agent in an Agentic Crime Scene Intelligence &
 Evidence Integrity Assistant. This is a human-supervised forensic documentation tool.
 
-Never infer guilt, identity, motive, ethnicity, age, offender profile, or suspect characteristics.
+Never infer guilt, identity, motive, ethnicity, age, offender profile or suspect characteristics.
 Never scientifically confirm blood, DNA, narcotics, explosives, fingerprints, toolmarks,
-firearm relationships, cause of fire, cause of death, or any laboratory conclusion from
+firearm relationships, cause of fire, cause of death or laboratory conclusions from
 a narrative or image alone.
 
-Image observations must remain clearly labelled as AI-proposed unless the investigator
-has explicitly verified them. Use cautious terms: visible, apparent, possible, potential,
-may warrant examination. Return ONLY valid JSON.
+Image observations must remain labelled as AI-proposed unless the investigator explicitly
+verified them. Use cautious terminology such as visible, apparent, possible, potential,
+or may warrant examination. Return ONLY valid JSON.
 """.strip()
 
     user = f"""
@@ -346,18 +348,18 @@ def retrieve_guidance(
 
     system = """
 You are MORBIT's Forensic Knowledge Retrieval Agent.
-Use ONLY the supplied retrieved excerpts for procedural, packaging, preservation,
+Use ONLY supplied retrieved excerpts for procedural, packaging, preservation,
 submission, form, fee, sealing, chain-of-custody or agency-specific claims.
 
 Image-derived content is context, not scientific confirmation. Distinguish AI-proposed
 visual observations from investigator-verified observations.
 
 Requirements:
-1. Cite every material procedural claim with [S1], [S2], etc.
+1. Cite material procedural claims with [S1], [S2], etc.
 2. Clearly distinguish NFA from PFSA material.
 3. Do not merge conflicting requirements.
 4. Do not invent procedures, laws, forms, fees, versions or authorities.
-5. Say when the retrieved sources do not establish a requirement.
+5. Say when retrieved sources do not establish a requirement.
 6. Keep all recommendations advisory and human-supervised.
 """.strip()
 
@@ -383,6 +385,7 @@ Produce:
 - Chain-of-custody considerations only when supported
 - Source limitations
 """.strip()
+
     return groq_text(client, system, user), results
 
 
@@ -436,52 +439,49 @@ def recommend_search_method(
     obstacles = (obstacle_level or "").lower()
 
     if any(k in stype for k in ["vehicle", "road traffic", "hit-and-run", "railway"]):
-        method = "Lane / Vehicle"
-        alt = "Zone / Quadrant"
+        method, alt = "Lane / Vehicle", "Zone / Quadrant"
     elif any(k in stype for k in ["marine", "boat"]) or env == "underwater":
-        method = "Underwater / Sector"
-        alt = "Grid"
-    elif env in {"indoor", "building", "multi-room"} or any(k in stype for k in [
+        method, alt = "Underwater / Sector", "Grid"
+    elif env in {"indoor", "building / multi-room"} or any(k in stype for k in [
         "burglary", "office", "bank", "hospital", "school", "warehouse", "prison", "religious"
     ]):
-        method = "Zone / Quadrant"
-        alt = "Grid"
+        method, alt = "Zone / Quadrant", "Grid"
     elif size in {"large", "very large"} and env in {"outdoor", "open terrain"}:
         method = "Grid" if personnel_count >= 3 else "Line / Strip"
         alt = "Line / Strip" if method == "Grid" else "Grid"
     elif obstacles == "low" and personnel_count <= 2 and env in {"outdoor", "open terrain"}:
-        method = "Spiral"
-        alt = "Grid"
+        method, alt = "Spiral", "Grid"
     elif "explosion" in stype or "blast" in stype:
-        method = "Zone / Quadrant"
-        alt = "Grid"
+        method, alt = "Zone / Quadrant", "Grid"
     else:
-        method = "Zone / Quadrant"
-        alt = "Line / Strip"
+        method, alt = "Zone / Quadrant", "Line / Strip"
 
-    rationale = (
-        f"{method} is recommended for this {environment.lower()} {scene_size.lower()} scene "
-        f"with approximately {personnel_count} search personnel and {obstacle_level.lower()} obstruction. "
-        f"It should be confirmed by the scene commander after considering boundaries, hazards, "
-        f"terrain, available staff, evidence fragility and agency SOP."
-    )
     return {
         "recommended": method,
         "alternative": alt,
-        "rationale": rationale,
+        "rationale": (
+            f"{method} is recommended for this {environment.lower()} {scene_size.lower()} scene "
+            f"with approximately {personnel_count} search personnel and {obstacle_level.lower()} obstruction. "
+            "The scene commander should confirm the pattern after considering boundaries, hazards, terrain, "
+            "staffing, evidence fragility and applicable SOP."
+        ),
         "details": SEARCH_METHODS[method],
         "alternative_details": SEARCH_METHODS[alt],
         "caution": (
-            "Search method selection is operational guidance, not an automatic forensic conclusion. "
-            "Document the selected pattern, boundaries, searcher assignments and any deviations."
+            "This is a planning recommendation, not an automatic operational order. "
+            "Document the selected method, boundaries, assignments and deviations."
         ),
     }
 
 
 def case_snapshot() -> dict[str, Any]:
+    selected_type = st.session_state.scene_type
+    if selected_type == "Other / Custom" and st.session_state.custom_scene_type.strip():
+        selected_type = st.session_state.custom_scene_type.strip()
+
     return {
         "case_id": st.session_state.case_id,
-        "scene_type": st.session_state.scene_type,
+        "scene_type": selected_type,
         "scene_dt": st.session_state.scene_dt,
         "location": st.session_state.location,
         "description": st.session_state.desc,
@@ -491,3 +491,15 @@ def case_snapshot() -> dict[str, Any]:
         "obstacle_level": st.session_state.obstacle_level,
         "agency": st.session_state.agency,
     }
+
+
+def workflow_status() -> list[dict[str, Any]]:
+    evidence_ready = st.session_state.evidence_df is not None and not st.session_state.evidence_df.empty
+    return [
+        {"step": 1, "label": "Case Intake", "done": bool(st.session_state.case_id and st.session_state.desc)},
+        {"step": 2, "label": "Visual Review", "done": bool(st.session_state.vision_records) or st.session_state.analysis_complete},
+        {"step": 3, "label": "Agentic Analysis", "done": bool(st.session_state.scene_analysis)},
+        {"step": 4, "label": "Search & Scene Map", "done": bool(st.session_state.search_plan and st.session_state.scene_map_png)},
+        {"step": 5, "label": "Evidence Integrity", "done": bool(evidence_ready)},
+        {"step": 6, "label": "Rich Report", "done": bool(st.session_state.report_docx)},
+    ]

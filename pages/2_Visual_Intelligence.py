@@ -1,83 +1,45 @@
 import streamlit as st
-from core import init_state, client_from_secrets
-from ui import apply_ui, hero, case_sidebar
-from vision_agent import analyze_image, image_metadata
+from core import init_state
+from ui import apply_ui, hero, case_sidebar, render_workflow
 
 st.set_page_config(page_title="Visual Intelligence | MORBIT", page_icon="📷", layout="wide")
 apply_ui(); init_state(); case_sidebar()
-hero("Visual Intelligence", "Analyze scene photographs, preserve the original image bytes, and promote only investigator-verified observations.")
+hero("Visual Intelligence", "Review image-analysis outputs and verify only observations you are prepared to adopt as investigator-confirmed scene context.")
+render_workflow(active_step=2)
 
-st.info(
-    "Uploaded images are now retained in session state for downstream agents and for embedding "
-    "inside the rich Word report. AI-proposed observations remain distinct from investigator verification."
-)
+if not st.session_state.vision_records:
+    st.info("No images were analyzed on the Command Dashboard. You may return to the dashboard and upload images, or continue without images.")
+    st.page_link("app.py",label="⬅ Return to Command Dashboard",icon="🏠")
+else:
+    verified=[]
+    for rec in st.session_state.vision_records:
+        m=rec["metadata"]; a=rec["analysis"]
+        st.markdown(f"### {rec['image_id']} — {m['filename']}")
+        c1,c2=st.columns([1,1.2])
+        with c1:
+            st.image(rec.get("image_bytes"),use_container_width=True)
+        with c2:
+            st.write(a.get("image_summary",""))
+            st.caption(f"{m.get('width')} × {m.get('height')} | {m.get('bytes',0):,} bytes")
+            st.caption("SHA-256: "+m.get("sha256",""))
+            for s in a.get("documentation_suggestions",[]): st.write("•",s)
 
-uploads = st.file_uploader(
-    "Upload up to 8 JPG/JPEG/PNG scene images",
-    type=["jpg","jpeg","png"],
-    accept_multiple_files=True,
-)
-if uploads and len(uploads) > 8:
-    st.warning("Only the first 8 images will be used.")
-    uploads = uploads[:8]
+        st.markdown("**Human verification**")
+        for j,obs in enumerate(a.get("potential_observations",[])):
+            key=f"verify_{rec['image_id']}_{j}"
+            checked=st.checkbox(
+                f"{obs.get('observation','')} — {obs.get('confidence','unspecified')} confidence",
+                key=key,
+            )
+            if checked:
+                verified.append(f"{rec['image_id']}: {obs.get('observation','')}")
+        if a.get("limitations"):
+            st.caption("Limitations: "+"; ".join(a["limitations"]))
+        st.divider()
 
-if uploads and st.button("Analyze Uploaded Images", type="primary", use_container_width=True):
-    client = client_from_secrets()
-    records = []
-    for idx, up in enumerate(uploads, start=1):
-        data = up.getvalue()
-        with st.spinner(f"Analyzing {up.name} ({idx}/{len(uploads)})..."):
-            meta = image_metadata(data, up.name)
-            visual = analyze_image(client, data, up.name, st.session_state.desc)
-        records.append({
-            "image_id": f"IMG-{idx:03d}",
-            "metadata": meta,
-            "analysis": visual,
-            "image_bytes": data,
-        })
-    st.session_state.vision_records = records
-    # Verification choices belong to the specific image set; reset them after re-analysis.
-    st.session_state.verified_visuals = []
-    st.success("Images analyzed and preserved for downstream agents/reporting.")
+    st.session_state.verified_visuals=verified
+    st.success(f"{len(verified)} visual observation(s) marked as investigator-verified.")
 
-verified = []
-for rec in st.session_state.vision_records:
-    meta = rec["metadata"]
-    st.markdown(f"### {rec['image_id']} — {meta['filename']}")
-    c1,c2 = st.columns([1,1.25])
-    with c1:
-        st.image(rec.get("image_bytes"), use_container_width=True)
-    with c2:
-        st.write(rec["analysis"].get("image_summary",""))
-        m1,m2,m3 = st.columns(3)
-        m1.metric("Width", meta.get("width"))
-        m2.metric("Height", meta.get("height"))
-        m3.metric("Bytes", f"{meta.get('bytes',0):,}")
-        st.caption("SHA-256: " + meta.get("sha256",""))
-        if rec["analysis"].get("documentation_suggestions"):
-            st.markdown("**Documentation suggestions**")
-            for x in rec["analysis"]["documentation_suggestions"]:
-                st.write("•", x)
-
-    st.markdown("**Human verification of AI-proposed observations**")
-    for j, obs in enumerate(rec["analysis"].get("potential_observations", [])):
-        key = f"verify_{rec['image_id']}_{j}"
-        accepted = st.checkbox(
-            f"{obs.get('observation','')} — confidence: {obs.get('confidence','unspecified')} "
-            f"— category: {obs.get('possible_category','other')}",
-            key=key,
-        )
-        if accepted:
-            verified.append(f"{rec['image_id']}: {obs.get('observation','')}")
-    if rec["analysis"].get("limitations"):
-        st.caption("Limitations: " + "; ".join(rec["analysis"]["limitations"]))
-    st.divider()
-
-st.session_state.verified_visuals = verified
-
-if st.session_state.vision_records:
-    st.success(
-        f"{len(st.session_state.vision_records)} image(s) are available to the Scene Analysis Agent, "
-        "RAG retrieval query, and Rich Report. "
-        f"{len(st.session_state.verified_visuals)} observation(s) are currently investigator-verified."
-    )
+    st.markdown("### Next step")
+    st.info("Because verification may change the usable visual context, continue to Agentic Analysis to refresh the scene analysis and source-grounded guidance.")
+    st.page_link("pages/3_Agentic_Analysis.py",label="➡️ Continue to Agentic Analysis",icon="🧠")

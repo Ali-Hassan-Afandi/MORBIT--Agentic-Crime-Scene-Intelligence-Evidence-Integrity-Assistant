@@ -1,62 +1,55 @@
-# MORBIT v4 Update Instructions
+# Update Instructions — MORBIT v5
 
-## Replace / add these files in your existing project
+## 1. Back up your project
 
-Replace:
-- `app.py`
-- `rag_engine.py`
-- `vision_agent.py`
-- `requirements.txt`
+Before replacing files, make a copy of the current repository folder.
 
-Add:
-- `core.py`
-- `ui.py`
-- `scene_map.py`
-- `report_builder.py`
-- the complete `pages/` folder
+## 2. Keep your existing knowledge folder
 
-## Important: KEEP your existing knowledge folder
-
-Do not delete or replace your existing:
+Do not delete:
 
 ```text
 knowledge/
 ├── NFA/
 ├── PFSA/
-└── manifest.json   # if you already use one
+└── manifest.json   # if present
 ```
 
-The ZIP contains empty NFA/PFSA placeholders only to show the expected structure.
+## 3. Replace/add
 
-## Install updated dependency
+Replace:
+- app.py
+- rag_engine.py
+- vision_agent.py
+- requirements.txt
 
-The new rich Word report uses `python-docx`, which is already included in the new `requirements.txt`.
+Add/replace:
+- core.py
+- ui.py
+- scene_map.py
+- report_builder.py
+- complete `pages/` folder
+
+## 4. GitHub update
 
 ```bash
-pip install -r requirements.txt
+git status
+git add .
+git commit -m "MORBIT v5 guided command dashboard"
+git pull --rebase origin main
+git push origin main
 ```
 
-## Streamlit
-
-Your existing Groq secret remains:
-
-```toml
-GROQ_API_KEY = "your-real-key"
-```
-
-Start with:
+If `git pull --rebase` reports a conflict, resolve the files in VS Code, then:
 
 ```bash
-streamlit run app.py
+git add .
+git rebase --continue
+git push origin main
 ```
 
-## Recommended page order
+## 5. Streamlit
 
-1. Scene Intake
-2. Visual Intelligence
-3. Agentic Analysis
-4. Search & Scene Map
-5. Evidence Integrity
-6. Rich Report
+If your Streamlit Community Cloud app is connected to the same GitHub repository and `main` branch, it should redeploy from the new commit.
 
-Uploaded image bytes are retained in the Streamlit session, passed as labelled visual-analysis context to downstream agents, and embedded in the generated DOCX report.
+The main page is now the required starting point for new users.
