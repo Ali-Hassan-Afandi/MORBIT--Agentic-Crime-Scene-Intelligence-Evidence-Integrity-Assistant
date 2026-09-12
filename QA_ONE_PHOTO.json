@@ -1,0 +1,30 @@
+{
+  "compiled_python_files": [
+    "app.py",
+    "core.py",
+    "rag_engine.py",
+    "report_builder.py",
+    "scene_map.py",
+    "ui.py",
+    "vision_agent.py",
+    "pages/1_Scene_Intake.py",
+    "pages/2_Visual_Intelligence.py",
+    "pages/3_Agentic_Analysis.py",
+    "pages/4_Search_and_Scene_Map.py",
+    "pages/5_Evidence_Integrity.py",
+    "pages/6_Rich_Report.py"
+  ],
+  "checks": {
+    "single_photo_only": true,
+    "single_photo_uploader_present": true,
+    "photo_saved_before_ai_call": true,
+    "same_photo_reused_for_analysis": true,
+    "report_embeds_saved_photo": true,
+    "strict_primary_model": true,
+    "capacity_fallback_model": true,
+    "compact_output_budget": true,
+    "no_visible_version_label_in_runtime": true,
+    "functional_report_with_saved_photo": true
+  },
+  "all_checks_passed": true
+}

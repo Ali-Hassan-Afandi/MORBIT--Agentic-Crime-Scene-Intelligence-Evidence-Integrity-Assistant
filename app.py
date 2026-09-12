@@ -21,8 +21,8 @@ init_state()
 
 hero(
     "Case Command Dashboard",
-    "Save the case intake first, review up to two scene photographs one at a time, "
-    "then start the complete case analysis and follow the guided workflow."
+    "Save the case intake, upload one representative scene photograph, analyze it once, "
+    "then continue through the complete case workflow without re-uploading the image."
 )
 
 st.markdown(
@@ -36,7 +36,7 @@ st.markdown(
 # Dashboard overview
 a,b,c,d = st.columns(4)
 a.metric("Case", st.session_state.case_id)
-b.metric("Photos reviewed", f"{len(st.session_state.vision_records)}/2")
+b.metric("Scene photo", "Ready" if st.session_state.vision_records else "Not added")
 c.metric("Potential evidence", len(st.session_state.evidence_df) if st.session_state.evidence_df is not None else 0)
 d.metric("Workflow", f"{sum(1 for x in workflow_status() if x['done'])}/6")
 render_workflow(active_step=st.session_state.current_step)
@@ -214,140 +214,127 @@ if save_intake:
         st.session_state.analysis_complete = False
         st.session_state.analysis_errors = []
         st.session_state.photo_1_filename = ""
-        st.session_state.photo_2_filename = ""
         st.session_state["intake_saved"] = True
         st.session_state.current_step = 1
 
-        st.success("Case intake saved. You can now review photographs one at a time before starting full analysis.")
+        st.success("Case intake saved. Add the single scene photograph, analyze it once, then continue to full case analysis.")
 
 # ------------------------------------------------------------------
-# STEP 2 — PHOTO 1, THEN PHOTO 2, EACH AS A SEPARATE API CALL
+# STEP 2 — ONE PERSISTENT SCENE PHOTOGRAPH
 # ------------------------------------------------------------------
 st.divider()
-st.markdown("## 2. Review Scene Photographs One at a Time")
+st.markdown("## 2. Add One Scene Photograph")
 st.caption(
-    "Maximum 2 photographs for the hackathon. Each photograph is analyzed only when you press its own button, "
-    "reducing back-to-back vision requests and helping avoid per-minute token/rate pressure."
+    "Hackathon reliability mode uses one representative scene photograph. "
+    "The image bytes and metadata are saved in session state immediately and the same record "
+    "is reused automatically by visual verification, scene analysis, evidence workflow and the final Word report."
 )
 
 if not st.session_state.get("intake_saved", False):
-    st.info("Save the case intake above before uploading or analyzing photographs.")
+    st.info("Save the case intake above before adding the scene photograph.")
 else:
-    client = None
-
-    # Photo 1
-    st.markdown("### Photograph 1")
-    photo1 = st.file_uploader(
-        "Upload Photograph 1",
-        type=["jpg","jpeg","png"],
+    scene_photo = st.file_uploader(
+        "Upload one representative scene photograph",
+        type=["jpg", "jpeg", "png"],
         accept_multiple_files=False,
-        key="photo1_upload",
+        key="single_scene_photo_upload",
     )
-    if photo1 is not None:
-        st.image(photo1, caption=photo1.name, width=430)
 
-    if st.button(
-        "🔎 Analyze Photograph 1 & Show Recommendation",
-        type="primary",
-        use_container_width=True,
-        disabled=photo1 is None,
-    ):
-        try:
-            client = client_from_secrets()
-            data = photo1.getvalue()
-            with st.spinner("Analyzing Photograph 1..."):
-                meta = image_metadata(data, photo1.name)
-                visual = analyze_image(client, data, photo1.name, st.session_state.desc)
+    # Persist the image immediately on upload, BEFORE any AI call.
+    # This is what keeps the photograph available across Streamlit page navigation
+    # and guarantees report embedding without re-uploading or refreshing.
+    if scene_photo is not None:
+        data = scene_photo.getvalue()
+        current_name = st.session_state.get("photo_1_filename", "")
 
-            rec = {
-                "image_id": "IMG-001",
-                "metadata": meta,
-                "analysis": visual,
-                "image_bytes": data,
-            }
-            # Replace only slot 1.
-            others = [r for r in st.session_state.vision_records if r.get("image_id") != "IMG-001"]
-            st.session_state.vision_records = [rec] + others
-            st.session_state.vision_records.sort(key=lambda r: r.get("image_id",""))
-            st.session_state.photo_1_filename = photo1.name
-            st.success("Photograph 1 analyzed and saved.")
-        except Exception as exc:
-            st.error(f"Photograph 1 analysis failed: {exc}")
+        if current_name != scene_photo.name or not st.session_state.vision_records:
+            try:
+                meta = image_metadata(data, scene_photo.name)
+                st.session_state.vision_records = [{
+                    "image_id": "IMG-001",
+                    "metadata": meta,
+                    "analysis": {},
+                    "image_bytes": data,
+                }]
+                st.session_state.photo_1_filename = scene_photo.name
+                st.session_state.verified_visuals = []
+                st.session_state.report_docx = None
+            except Exception as exc:
+                st.error(f"Could not save photograph: {exc}")
 
-    rec1 = next((r for r in st.session_state.vision_records if r.get("image_id") == "IMG-001"), None)
-    if rec1:
-        a1 = rec1["analysis"]
-        st.markdown("#### Photograph 1 — Immediate Findings & Recommendation")
-        st.write(a1.get("image_summary",""))
-        for s in a1.get("documentation_suggestions", []):
-            st.info("Recommendation: " + s)
-        with st.expander("Potential visual observations"):
-            for obs in a1.get("potential_observations", []):
-                st.write(
-                    f"• {obs.get('observation','')} "
-                    f"({obs.get('confidence','unspecified')} confidence; "
-                    f"{obs.get('possible_category','other')})"
-                )
-        if a1.get("limitations"):
-            st.caption("Limitations: " + "; ".join(a1["limitations"]))
-
-    # Photo 2 appears after photo 1 has been analyzed, enforcing sequence.
-    if rec1:
-        st.divider()
-        st.markdown("### Photograph 2 — Optional")
-        photo2 = st.file_uploader(
-            "Upload Photograph 2",
-            type=["jpg","jpeg","png"],
-            accept_multiple_files=False,
-            key="photo2_upload",
+        st.image(data, caption=scene_photo.name, width=430)
+        st.success(
+            "Photograph saved to the case session. It will now follow the case automatically "
+            "through every next step and into the final report."
         )
-        if photo2 is not None:
-            st.image(photo2, caption=photo2.name, width=430)
+
+    photo_record = (
+        st.session_state.vision_records[0]
+        if st.session_state.vision_records
+        else None
+    )
+
+    if photo_record:
+        already_analyzed = bool(photo_record.get("analysis", {}).get("image_summary"))
+
+        button_label = (
+            "🔎 Re-analyze Saved Scene Photograph"
+            if already_analyzed
+            else "🔎 Analyze Saved Scene Photograph"
+        )
 
         if st.button(
-            "🔎 Analyze Photograph 2 & Show Recommendation",
+            button_label,
             type="primary",
             use_container_width=True,
-            disabled=photo2 is None,
         ):
             try:
-                if client is None:
-                    client = client_from_secrets()
-                data = photo2.getvalue()
-                with st.spinner("Analyzing Photograph 2..."):
-                    meta = image_metadata(data, photo2.name)
-                    visual = analyze_image(client, data, photo2.name, st.session_state.desc)
+                client = client_from_secrets()
+                with st.spinner("Analyzing the saved scene photograph..."):
+                    visual = analyze_image(
+                        client,
+                        photo_record["image_bytes"],
+                        photo_record["metadata"]["filename"],
+                        st.session_state.desc,
+                    )
 
-                rec = {
-                    "image_id": "IMG-002",
-                    "metadata": meta,
-                    "analysis": visual,
-                    "image_bytes": data,
-                }
-                others = [r for r in st.session_state.vision_records if r.get("image_id") != "IMG-002"]
-                st.session_state.vision_records = others + [rec]
-                st.session_state.vision_records.sort(key=lambda r: r.get("image_id",""))
-                st.session_state.photo_2_filename = photo2.name
-                st.success("Photograph 2 analyzed and saved.")
+                # Update analysis only. Keep the original image bytes + metadata.
+                st.session_state.vision_records[0]["analysis"] = visual
+                st.session_state.report_docx = None
+                st.success("Scene photograph analyzed and retained for all downstream steps.")
+                st.rerun()
             except Exception as exc:
-                st.error(f"Photograph 2 analysis failed: {exc}")
+                st.error(
+                    "Photograph analysis is temporarily unavailable, but the photograph itself "
+                    "is safely retained in this case session. You may retry the analysis without "
+                    "re-uploading it. Provider message: " + str(exc)
+                )
 
-        rec2 = next((r for r in st.session_state.vision_records if r.get("image_id") == "IMG-002"), None)
-        if rec2:
-            a2 = rec2["analysis"]
-            st.markdown("#### Photograph 2 — Immediate Findings & Recommendation")
-            st.write(a2.get("image_summary",""))
-            for s in a2.get("documentation_suggestions", []):
-                st.info("Recommendation: " + s)
+        photo_record = st.session_state.vision_records[0]
+        analysis = photo_record.get("analysis", {})
+
+        if analysis.get("image_summary"):
+            st.markdown("#### Immediate Findings & Recommendations")
+            st.write(analysis.get("image_summary", ""))
+
+            for item in analysis.get("documentation_suggestions", []):
+                st.info("Recommendation: " + item)
+
             with st.expander("Potential visual observations"):
-                for obs in a2.get("potential_observations", []):
+                for obs in analysis.get("potential_observations", []):
                     st.write(
                         f"• {obs.get('observation','')} "
                         f"({obs.get('confidence','unspecified')} confidence; "
                         f"{obs.get('possible_category','other')})"
                     )
-            if a2.get("limitations"):
-                st.caption("Limitations: " + "; ".join(a2["limitations"]))
+
+            if analysis.get("limitations"):
+                st.caption("Limitations: " + "; ".join(analysis["limitations"]))
+        else:
+            st.info(
+                "The photograph is already saved to the case. Analyze it when the vision service "
+                "is available; you do not need to upload it again."
+            )
 
 # ------------------------------------------------------------------
 # STEP 3 — START FULL CASE ANALYSIS
@@ -357,8 +344,7 @@ st.markdown("## 3. Start Case Analysis")
 st.markdown(
     """<div class="next-action">
     <strong>Ready when the intake is saved.</strong><br>
-    The full analysis uses the saved intake plus any photographs already analyzed above.
-    It does not send the photographs to the vision model again.
+    The full analysis reuses the one saved photograph record and its visual analysis. The image is not uploaded or sent to the vision model again.
     </div>""",
     unsafe_allow_html=True,
 )
@@ -447,10 +433,10 @@ st.divider()
 st.markdown("## 4. Guided Next Step")
 
 if not st.session_state.analysis_started:
-    st.info("Save the intake, optionally analyze one or two photographs, then press **START FULL CASE ANALYSIS**.")
+    st.info("Save the intake, add the single scene photograph, analyze it once, then press **START FULL CASE ANALYSIS**.")
 else:
     c1,c2,c3 = st.columns(3)
-    c1.metric("Photos analyzed", f"{len(st.session_state.vision_records)}/2")
+    c1.metric("Scene photo", "Analyzed" if (st.session_state.vision_records and st.session_state.vision_records[0].get("analysis", {}).get("image_summary")) else ("Saved" if st.session_state.vision_records else "None"))
     c2.metric("Potential evidence", len(st.session_state.evidence_df) if st.session_state.evidence_df is not None else 0)
     c3.metric("Sources retrieved", len(st.session_state.sources))
 

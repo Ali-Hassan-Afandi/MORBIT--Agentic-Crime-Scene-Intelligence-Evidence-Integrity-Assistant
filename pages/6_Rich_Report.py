@@ -15,7 +15,7 @@ score,alerts=integrity_score(st.session_state.evidence_df)
 st.markdown("### Final readiness")
 checks=[
     ("Scene intake",bool(st.session_state.case_id and st.session_state.desc)),
-    ("Image record",bool(st.session_state.vision_records)),
+    ("Saved scene photograph",bool(st.session_state.vision_records)),
     ("Scene analysis",bool(st.session_state.scene_analysis)),
     ("Search recommendation",bool(st.session_state.search_plan)),
     ("Scene map",bool(st.session_state.scene_map_png)),
@@ -26,7 +26,7 @@ for label,ready in checks:
     st.write(("✅" if ready else "▫️")+" "+label)
 
 if st.button("Generate Final MORBIT Word Report (.docx)",type="primary",use_container_width=True):
-    with st.spinner("Building rich Word report with embedded images and scene map..."):
+    with st.spinner("Building rich Word report with the saved scene photograph and scene map..."):
         st.session_state.report_docx=build_rich_report(
             case=case_snapshot(),
             analysis=st.session_state.scene_analysis,

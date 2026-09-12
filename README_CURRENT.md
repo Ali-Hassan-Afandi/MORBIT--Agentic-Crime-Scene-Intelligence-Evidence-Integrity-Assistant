@@ -1,33 +1,31 @@
-# MORBIT CSI CaseAssistant
+# MORBIT CSI CaseAssistant — One-Photo Hackathon Build
 
-A human-supervised crime-scene intelligence, evidence-integrity and case-reporting assistant.
+This build optimizes reliability and demo speed.
 
-## Current hackathon workflow
+## Key behavior
 
-1. Save the complete case intake.
-2. Analyze Photograph 1.
-3. Review its immediate recommendations.
-4. Optionally analyze Photograph 2 separately.
-5. Start full case analysis.
-6. Verify image observations.
-7. Refresh agentic analysis.
-8. Enter evidence coordinates for the north-up scene map.
-9. Complete and save the evidence-integrity checklist.
-10. Generate the formatted Word report.
+- One representative scene photograph only.
+- The photograph is saved to Streamlit session state immediately on upload.
+- The saved bytes, metadata and SHA-256 record are reused automatically across:
+  - Visual Intelligence
+  - Agentic Analysis
+  - Evidence workflow
+  - Scene mapping context
+  - Final Word report
+- No re-upload and no browser refresh are required for the final report.
+- The vision model is called only once unless the user deliberately presses Re-analyze.
 
-## Important deployment note
+## Vision reliability
 
-The visible application name comes from `APP_NAME` in `core.py` and the hero renderer in `ui.py`.
-This clean project contains no runtime `APP_VERSION` constant and no visible `V5` label.
+Primary:
+`qwen/qwen3.8-27b` with strict JSON Schema.
 
-## Existing knowledge files
+Fallback:
+`qwen/qwen3.6-27b` without provider-side JSON mode, followed by local JSON parsing.
 
-When updating an existing repository, keep your real:
+This means a temporary Qwen 3.8 over-capacity response does not immediately end the demo.
+Normal successful requests have no artificial waiting delay.
 
-```text
-knowledge/NFA/
-knowledge/PFSA/
-knowledge/manifest.json
-```
+## Deployment
 
-Do not replace those with the empty placeholder directories from this package.
+Replace the files from this package in the GitHub repository, keeping the existing real `knowledge/` content.

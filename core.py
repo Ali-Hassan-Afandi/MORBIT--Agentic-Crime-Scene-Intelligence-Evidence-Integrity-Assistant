@@ -248,7 +248,6 @@ def init_state() -> None:
         "analysis_errors": [],
         "intake_saved": False,
         "photo_1_filename": "",
-        "photo_2_filename": "",
         "confirm_full_clear": False,
     }
 
@@ -498,7 +497,6 @@ def clear_analysis_keep_intake() -> None:
         "analysis_errors": [],
         "intake_saved": False,
         "photo_1_filename": "",
-        "photo_2_filename": "",
     }.items():
         st.session_state[key] = value
 

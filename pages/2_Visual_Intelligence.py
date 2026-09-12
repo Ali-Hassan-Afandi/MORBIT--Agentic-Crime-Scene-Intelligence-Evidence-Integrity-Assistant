@@ -8,12 +8,12 @@ hero("Visual Intelligence", "Review image-analysis outputs and verify only obser
 render_workflow(active_step=2)
 
 if not st.session_state.vision_records:
-    st.info("No images were analyzed on the Command Dashboard. You may return to the dashboard and upload images, or continue without images.")
+    st.info("No scene photograph is saved yet. Return to the Command Dashboard and add the single scene photograph.")
     st.page_link("app.py",label="⬅ Return to Command Dashboard",icon="🏠")
 else:
     verified=[]
     for rec in st.session_state.vision_records:
-        m=rec["metadata"]; a=rec["analysis"]
+        m=rec.get("metadata",{}); a=rec.get("analysis",{})
         st.markdown(f"### {rec['image_id']} — {m['filename']}")
         c1,c2=st.columns([1,1.2])
         with c1:
@@ -24,6 +24,8 @@ else:
             st.caption("SHA-256: "+m.get("sha256",""))
             for s in a.get("documentation_suggestions",[]): st.write("•",s)
 
+        if not a.get("image_summary"):
+            st.warning("The photograph is saved, but visual AI analysis is not yet available. Return to the dashboard to retry analysis; re-upload is not required.")
         st.markdown("**Human verification**")
         for j,obs in enumerate(a.get("potential_observations",[])):
             key=f"verify_{rec['image_id']}_{j}"
