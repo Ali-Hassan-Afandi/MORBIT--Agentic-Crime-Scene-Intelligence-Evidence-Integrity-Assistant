@@ -18,9 +18,8 @@ from rag_engine import (
 )
 from vision_agent import VISION_MODEL
 
-APP_NAME = "MORBIT — Agentic Crime Scene Intelligence & Evidence Integrity Assistant"
-APP_SHORT = "MORBIT CSI"
-APP_VERSION = "v5"
+APP_NAME = "MORBIT CSI CaseAssistant"
+APP_SHORT = "MORBIT CSI CaseAssistant"
 TEXT_MODEL = "openai/gpt-oss-20b"
 
 SCENE_TYPE_GROUPS = {
@@ -237,6 +236,9 @@ def init_state() -> None:
         "analysis_complete": False,
         "current_step": 1,
         "analysis_errors": [],
+        "intake_saved": False,
+        "photo_1_filename": "",
+        "photo_2_filename": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -279,8 +281,7 @@ def scene_agent(
     verified_visuals = verified_visuals or []
 
     system = """
-You are MORBIT's Scene Analysis Agent in an Agentic Crime Scene Intelligence &
-Evidence Integrity Assistant. This is a human-supervised forensic documentation tool.
+You are MORBIT CSI CaseAssistant's Scene Analysis Agent. This is a human-supervised forensic documentation tool.
 
 Never infer guilt, identity, motive, ethnicity, age, offender profile or suspect characteristics.
 Never scientifically confirm blood, DNA, narcotics, explosives, fingerprints, toolmarks,
@@ -347,7 +348,7 @@ def retrieve_guidance(
     context = make_context(results)
 
     system = """
-You are MORBIT's Forensic Knowledge Retrieval Agent.
+You are MORBIT CSI CaseAssistant's Forensic Knowledge Retrieval Agent.
 Use ONLY supplied retrieved excerpts for procedural, packaging, preservation,
 submission, form, fee, sealing, chain-of-custody or agency-specific claims.
 
@@ -361,6 +362,8 @@ Requirements:
 4. Do not invent procedures, laws, forms, fees, versions or authorities.
 5. Say when retrieved sources do not establish a requirement.
 6. Keep all recommendations advisory and human-supervised.
+7. Return plain professional text only. Do NOT use Markdown heading markers (#), bold markers (**), code fences, or Markdown tables.
+8. Use short section titles on their own lines and simple hyphen bullet points for recommendations.
 """.strip()
 
     user = f"""
@@ -479,19 +482,43 @@ def clear_analysis_keep_intake() -> None:
         "analysis_complete": False,
         "current_step": 1,
         "analysis_errors": [],
+        "intake_saved": False,
+        "photo_1_filename": "",
+        "photo_2_filename": "",
     }.items():
         st.session_state[key] = value
+
+
+
+def normalize_evidence_checklist(df: pd.DataFrame | None) -> pd.DataFrame:
+    """
+    Guarantee deterministic bool dtypes for every evidence-completion field.
+    This makes Streamlit render real checkbox controls and prevents values
+    from falling back to object/string dtype during reruns.
+    """
+    if df is None:
+        return pd.DataFrame()
+
+    work = df.copy()
+    fields = [
+        "Photographed",
+        "Collector Recorded",
+        "Packaging Recorded",
+        "Seal Recorded",
+        "Custody Started",
+    ]
+    for field in fields:
+        if field not in work.columns:
+            work[field] = False
+        work[field] = work[field].fillna(False).astype(bool)
+    return work
 
 
 def integrity_score(df: pd.DataFrame) -> tuple[int, list[str]]:
     fields = ["Photographed", "Collector Recorded", "Packaging Recorded", "Seal Recorded", "Custody Started"]
     if df is None or df.empty:
         return 0, ["No potential evidence is currently recorded."]
-    work = df.copy()
-    for field in fields:
-        if field not in work.columns:
-            work[field] = False
-        work[field] = work[field].fillna(False).astype(bool)
+    work = normalize_evidence_checklist(df)
     done = int(work[fields].sum().sum())
     total = len(work) * len(fields)
     alerts = []

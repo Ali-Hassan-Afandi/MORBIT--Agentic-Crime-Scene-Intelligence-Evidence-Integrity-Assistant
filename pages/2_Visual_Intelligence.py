@@ -2,7 +2,7 @@ import streamlit as st
 from core import init_state
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
-st.set_page_config(page_title="Visual Intelligence | MORBIT", page_icon="📷", layout="wide")
+st.set_page_config(page_title="Visual Intelligence | MORBIT CSI CaseAssistant", page_icon="📷", layout="wide")
 apply_ui(); init_state(); case_sidebar()
 hero("Visual Intelligence", "Review image-analysis outputs and verify only observations you are prepared to adopt as investigator-confirmed scene context.")
 render_workflow(active_step=2)
@@ -42,4 +42,10 @@ else:
 
     st.markdown("### Next step")
     st.info("Because verification may change the usable visual context, continue to Agentic Analysis to refresh the scene analysis and source-grounded guidance.")
-    st.page_link("pages/3_Agentic_Analysis.py",label="➡️ Continue to Agentic Analysis",icon="🧠")
+    st.markdown(
+        """<div class="next-action"><strong>NEXT STEP → Refresh Agentic Analysis</strong><br>
+        Verified visual observations will be included in the refreshed analysis.</div>""",
+        unsafe_allow_html=True,
+    )
+    if st.button("➡️ CONTINUE TO AGENTIC ANALYSIS", type="primary", use_container_width=True):
+        st.switch_page("pages/3_Agentic_Analysis.py")

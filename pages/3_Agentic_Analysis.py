@@ -5,7 +5,7 @@ from core import (
 )
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
-st.set_page_config(page_title="Agentic Analysis | MORBIT", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="Agentic Analysis | MORBIT CSI CaseAssistant", page_icon="🧠", layout="wide")
 apply_ui(); init_state(); case_sidebar()
 hero("Agentic Analysis", "Refresh and review the multimodal scene analysis after human visual verification.")
 render_workflow(active_step=3)
@@ -50,4 +50,10 @@ if st.session_state.scene_analysis:
     st.markdown(st.session_state.guidance)
 
     st.markdown("### Next step")
-    st.page_link("pages/4_Search_and_Scene_Map.py",label="➡️ Continue to Search Strategy & Scene Map",icon="🧭")
+    st.markdown(
+        """<div class="next-action"><strong>NEXT STEP → Search & Scene Map</strong><br>
+        Confirm the search strategy and enter coordinates for the automatically listed evidence.</div>""",
+        unsafe_allow_html=True,
+    )
+    if st.button("➡️ CONTINUE TO SEARCH & SCENE MAP", type="primary", use_container_width=True):
+        st.switch_page("pages/4_Search_and_Scene_Map.py")

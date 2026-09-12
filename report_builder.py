@@ -31,17 +31,70 @@ def _bullet(doc,text):
     p=doc.add_paragraph(style="List Bullet")
     r=p.add_run(str(text)); r.font.name="Aptos"; r.font.size=Pt(9.5)
 
+def _number(doc,text):
+    p=doc.add_paragraph(style="List Number")
+    r=p.add_run(str(text)); r.font.name="Aptos"; r.font.size=Pt(9.5)
+
+def _clean_inline_md(text: str) -> str:
+    text = text or ""
+    # Markdown links -> visible label (URL omitted from prose; source URLs have their own section).
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    # Remove common inline Markdown decoration.
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"__(.*?)__", r"\1", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = text.replace("```", "")
+    text = text.replace("~~", "")
+    text = re.sub(r"^\s*>\s?", "", text)
+    return text.strip()
+
+
 def _tokens(text):
-    out=[]
+    """
+    Convert model text or Markdown-like text into clean Word structure.
+    Output tokens: h1/h2/h3, bullet, number, paragraph.
+    Markdown symbols never reach the final DOCX.
+    """
+    out = []
     for raw in (text or "").splitlines():
-        line=raw.strip()
-        if not line: continue
-        line=re.sub(r"\*\*(.*?)\*\*",r"\1",line)
-        if line.startswith("### "): out.append(("h3",line[4:]))
-        elif line.startswith("## "): out.append(("h2",line[3:]))
-        elif line.startswith("# "): out.append(("h1",line[2:]))
-        elif line.startswith(("- ","• ")): out.append(("b",line[2:]))
-        else: out.append(("p",line))
+        line = raw.strip()
+        if not line:
+            continue
+
+        # Markdown headings.
+        if line.startswith("### "):
+            out.append(("h3", _clean_inline_md(line[4:])))
+            continue
+        if line.startswith("## "):
+            out.append(("h2", _clean_inline_md(line[3:])))
+            continue
+        if line.startswith("# "):
+            out.append(("h1", _clean_inline_md(line[2:])))
+            continue
+
+        # Bullets: -, *, +, •
+        m = re.match(r"^(?:[-*+•])\s+(.*)$", line)
+        if m:
+            out.append(("bullet", _clean_inline_md(m.group(1))))
+            continue
+
+        # Numbered lists: 1. / 1) / (1)
+        m = re.match(r"^(?:\(?\d+\)?[.)])\s+(.*)$", line)
+        if m:
+            out.append(("number", _clean_inline_md(m.group(1))))
+            continue
+
+        cleaned = _clean_inline_md(line)
+
+        # Plain section labels from the RAG prompt become subheadings.
+        if (
+            len(cleaned) <= 90
+            and cleaned.endswith(":")
+            and not cleaned.lower().startswith(("http://", "https://"))
+        ):
+            out.append(("h3", cleaned[:-1].strip()))
+        else:
+            out.append(("p", cleaned))
     return out
 
 def build_rich_report(
@@ -56,16 +109,16 @@ def build_rich_report(
     doc.styles["Normal"].font.name="Aptos"; doc.styles["Normal"].font.size=Pt(9.5)
 
     hp=sec.header.paragraphs[0]
-    hp.text="MORBIT — Agentic Crime Scene Intelligence & Evidence Integrity Assistant"
+    hp.text="MORBIT CSI CaseAssistant"
     hp.alignment=WD_ALIGN_PARAGRAPH.RIGHT
     hp.runs[0].font.size=Pt(8); hp.runs[0].font.color.rgb=RGBColor.from_string(GREY)
 
     banner=doc.add_table(rows=1,cols=1); banner.alignment=WD_TABLE_ALIGNMENT.CENTER
     c=banner.cell(0,0); _shade(c,NAVY)
     p=c.paragraphs[0]; p.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    r=p.add_run("MORBIT"); r.font.name="Aptos Display"; r.font.size=Pt(28); r.font.bold=True; r.font.color.rgb=RGBColor.from_string(WHITE)
+    r=p.add_run("MORBIT CSI CaseAssistant"); r.font.name="Aptos Display"; r.font.size=Pt(28); r.font.bold=True; r.font.color.rgb=RGBColor.from_string(WHITE)
     p2=c.add_paragraph(); p2.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    rr=p2.add_run("Agentic Crime Scene Intelligence & Evidence Integrity Assistant")
+    rr=p2.add_run("Crime Scene Intelligence • Evidence Integrity • Case Reporting")
     rr.font.name="Aptos"; rr.font.size=Pt(12); rr.font.color.rgb=RGBColor.from_string("D8E8F8")
 
     title=doc.add_paragraph(); title.alignment=WD_ALIGN_PARAGRAPH.CENTER
@@ -186,7 +239,8 @@ def build_rich_report(
         for typ,text in _tokens(guidance):
             if typ=="h1": _heading(doc,text,2)
             elif typ in {"h2","h3"}: _heading(doc,text,3)
-            elif typ=="b": _bullet(doc,text)
+            elif typ=="bullet": _bullet(doc,text)
+            elif typ=="number": _number(doc,text)
             else: doc.add_paragraph(text)
     else:
         doc.add_paragraph("No source-grounded guidance generated.")
@@ -214,7 +268,7 @@ def build_rich_report(
     r.font.color.rgb=RGBColor.from_string(RED)
 
     fp=sec.footer.paragraphs[0]; fp.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    fr=fp.add_run("MORBIT • Agentic Crime Scene Intelligence & Evidence Integrity Assistant")
+    fr=fp.add_run("MORBIT CSI CaseAssistant • Human-Supervised Forensic Documentation")
     fr.font.size=Pt(8); fr.font.color.rgb=RGBColor.from_string(GREY)
 
     out=io.BytesIO(); doc.save(out); return out.getvalue()

@@ -1,5 +1,5 @@
 import streamlit as st
-from core import APP_NAME, APP_VERSION, init_state, workflow_status
+from core import APP_NAME, init_state, workflow_status
 
 def apply_ui():
     init_state()
@@ -125,13 +125,27 @@ def apply_ui():
       filter:brightness(1.07);
       transform:translateY(-1px);
     }
+
+    .next-action{
+      margin-top:14px;
+      padding:18px 20px;
+      border-radius:16px;
+      background:linear-gradient(100deg,rgba(27,108,168,.16),rgba(47,195,216,.14),rgba(116,87,217,.13));
+      border:1px solid rgba(47,195,216,.32);
+      box-shadow:0 10px 26px rgba(30,105,150,.10);
+      font-size:15px;
+    }
+    .next-action strong{
+      color:#2FC3D8;
+      font-size:16px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 def hero(page_name: str, subtitle: str):
     st.markdown(f"""
     <div class="morbit-hero">
-      <div class="morbit-kicker">{APP_VERSION.upper()} • HUMAN-SUPERVISED FORENSIC INTELLIGENCE</div>
+      <div class="morbit-kicker">HUMAN-SUPERVISED FORENSIC INTELLIGENCE</div>
       <div class="morbit-title">{APP_NAME}</div>
       <div class="morbit-sub"><b>{page_name}</b> — {subtitle}</div>
     </div>

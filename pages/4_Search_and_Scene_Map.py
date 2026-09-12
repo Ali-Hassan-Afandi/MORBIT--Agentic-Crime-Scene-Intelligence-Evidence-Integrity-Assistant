@@ -8,7 +8,7 @@ from core import (
 from scene_map import generate_scene_map
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
-st.set_page_config(page_title="Search & Scene Map | MORBIT",page_icon="🧭",layout="wide")
+st.set_page_config(page_title="Search & Scene Map | MORBIT CSI CaseAssistant",page_icon="🧭",layout="wide")
 apply_ui(); init_state(); case_sidebar()
 
 hero(
@@ -141,9 +141,10 @@ if st.session_state.scene_map_png:
         use_container_width=True,
     )
 
-    st.markdown("### Next step")
-    st.page_link(
-        "pages/5_Evidence_Integrity.py",
-        label="Continue to Evidence Integrity",
-        icon="🔐",
+    st.markdown(
+        """<div class="next-action"><strong>NEXT STEP → Evidence Integrity</strong><br>
+        Complete the evidence-action checklist before generating the final report.</div>""",
+        unsafe_allow_html=True,
     )
+    if st.button("➡️ CONTINUE TO EVIDENCE INTEGRITY", type="primary", use_container_width=True):
+        st.switch_page("pages/5_Evidence_Integrity.py")
