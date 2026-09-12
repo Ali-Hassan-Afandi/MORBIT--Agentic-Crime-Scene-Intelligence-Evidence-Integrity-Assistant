@@ -1,0 +1,68 @@
+{
+  "syntax": [
+    [
+      "rag_engine.py",
+      "PASS"
+    ],
+    [
+      "core.py",
+      "PASS"
+    ],
+    [
+      "ui.py",
+      "PASS"
+    ],
+    [
+      "scene_map.py",
+      "PASS"
+    ],
+    [
+      "app.py",
+      "PASS"
+    ],
+    [
+      "vision_agent.py",
+      "PASS"
+    ],
+    [
+      "report_builder.py",
+      "PASS"
+    ],
+    [
+      "pages/1_Scene_Intake.py",
+      "PASS"
+    ],
+    [
+      "pages/5_Evidence_Integrity.py",
+      "PASS"
+    ],
+    [
+      "pages/3_Agentic_Analysis.py",
+      "PASS"
+    ],
+    [
+      "pages/4_Search_and_Scene_Map.py",
+      "PASS"
+    ],
+    [
+      "pages/2_Visual_Intelligence.py",
+      "PASS"
+    ],
+    [
+      "pages/6_Rich_Report.py",
+      "PASS"
+    ]
+  ],
+  "old_long_name_found": false,
+  "app_version_found": false,
+  "visible_v5_found": false,
+  "new_name_count": 13,
+  "intake_saved_default": true,
+  "safe_intake_lookup": true,
+  "init_state_called_app": true,
+  "checkbox_column_present": true,
+  "save_checklist_button": true,
+  "photo1_separate": true,
+  "photo2_separate": true,
+  "markdown_cleaner_present": true
+}

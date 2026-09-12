@@ -36,16 +36,19 @@ def _number(doc,text):
     r=p.add_run(str(text)); r.font.name="Aptos"; r.font.size=Pt(9.5)
 
 def _clean_inline_md(text: str) -> str:
+    """Remove Markdown syntax while preserving readable forensic prose."""
     text = text or ""
-    # Markdown links -> visible label (URL omitted from prose; source URLs have their own section).
-    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-    # Remove common inline Markdown decoration.
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # links
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)  # image syntax
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     text = re.sub(r"__(.*?)__", r"\1", text)
+    text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", text)
+    text = re.sub(r"(?<!_)_([^_]+)_(?!_)", r"\1", text)
     text = re.sub(r"`([^`]+)`", r"\1", text)
     text = text.replace("```", "")
     text = text.replace("~~", "")
     text = re.sub(r"^\s*>\s?", "", text)
+    text = re.sub(r"^\s*#{1,6}\s*", "", text)
     return text.strip()
 
 

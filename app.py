@@ -181,7 +181,7 @@ if save_intake:
         errors.append("Please enter the custom scene type.")
 
     if errors:
-        st.session_state.intake_saved = False
+        st.session_state["intake_saved"] = False
         for msg in errors:
             st.error(msg)
     else:
@@ -215,7 +215,7 @@ if save_intake:
         st.session_state.analysis_errors = []
         st.session_state.photo_1_filename = ""
         st.session_state.photo_2_filename = ""
-        st.session_state.intake_saved = True
+        st.session_state["intake_saved"] = True
         st.session_state.current_step = 1
 
         st.success("Case intake saved. You can now review photographs one at a time before starting full analysis.")
@@ -230,7 +230,7 @@ st.caption(
     "reducing back-to-back vision requests and helping avoid per-minute token/rate pressure."
 )
 
-if not st.session_state.intake_saved:
+if not st.session_state.get("intake_saved", False):
     st.info("Save the case intake above before uploading or analyzing photographs.")
 else:
     client = None
@@ -367,7 +367,7 @@ if st.button(
     "🚀 START FULL CASE ANALYSIS",
     type="primary",
     use_container_width=True,
-    disabled=not st.session_state.intake_saved,
+    disabled=not st.session_state.get("intake_saved", False),
 ):
     st.session_state.analysis_started = True
     st.session_state.analysis_complete = False

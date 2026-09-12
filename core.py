@@ -208,6 +208,14 @@ def load_rag(agency: str, fingerprint: str):
 
 
 def init_state() -> None:
+    """
+    Initialize every session key used anywhere in the app.
+
+    Important for Streamlit Cloud:
+    existing browser sessions may survive a redeploy. Therefore this function
+    adds any newly introduced key even when the session already contains older
+    MORBIT state.
+    """
     defaults = {
         "case_id": "MORBIT-DEMO-001",
         "scene_type": "Burglary / Housebreaking",
@@ -229,7 +237,9 @@ def init_state() -> None:
         "evidence_df": pd.DataFrame(),
         "search_plan": None,
         "scene_map_png": None,
-        "map_items": pd.DataFrame(columns=["Evidence ID", "Evidence Item", "Category", "X", "Y", "Notes"]),
+        "map_items": pd.DataFrame(
+            columns=["Evidence ID", "Evidence Item", "Category", "X", "Y", "Notes"]
+        ),
         "report_docx": None,
         "investigator_notes": "",
         "analysis_started": False,
@@ -239,9 +249,13 @@ def init_state() -> None:
         "intake_saved": False,
         "photo_1_filename": "",
         "photo_2_filename": "",
+        "confirm_full_clear": False,
     }
+
     for key, value in defaults.items():
         if key not in st.session_state:
+            # Mutable defaults are freshly constructed on each call to this
+            # function, so assigning them here is safe.
             st.session_state[key] = value
 
 
@@ -362,7 +376,7 @@ Requirements:
 4. Do not invent procedures, laws, forms, fees, versions or authorities.
 5. Say when retrieved sources do not establish a requirement.
 6. Keep all recommendations advisory and human-supervised.
-7. Return plain professional text only. Do NOT use Markdown heading markers (#), bold markers (**), code fences, or Markdown tables.
+7. Return plain professional text only. Do NOT use Markdown heading markers (#), bold markers (**), underscores for emphasis, code fences, or Markdown tables.
 8. Use short section titles on their own lines and simple hyphen bullet points for recommendations.
 """.strip()
 
