@@ -2,7 +2,7 @@ import streamlit as st
 from core import SCENE_TYPES, init_state
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
-st.set_page_config(page_title="Scene Intake | MORBIT", page_icon="📋", layout="wide")
+st.set_page_config(page_title="Scene Intake | MORBIT CSI CaseAssistant", page_icon="📋", layout="wide")
 apply_ui(); init_state(); case_sidebar()
 hero("Scene Intake", "Edit or refine the intake created from the Command Dashboard.")
 render_workflow(active_step=1)
