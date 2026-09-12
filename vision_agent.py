@@ -4,18 +4,29 @@ import base64
 import hashlib
 import io
 import json
+import random
+import re
 import time
 from typing import Any
 
 from PIL import Image
 from groq import Groq
 
-# Qwen 3.8 supports BOTH vision and strict JSON Schema Structured Outputs on Groq.
+# Vision + strict JSON Schema support.
 VISION_MODEL = "qwen/qwen3.8-27b"
 
-# Keep well below the user's 1000 OTPM ceiling.
-PRIMARY_OUTPUT_TOKENS = 420
-RETRY_OUTPUT_TOKENS = 320
+# Keep output comfortably below the user's OTPM ceiling.
+PRIMARY_OUTPUT_TOKENS = 360
+RETRY_OUTPUT_TOKENS = 280
+
+# Hackathon reliability:
+# Groq currently counts each Qwen vision image as 2048 input tokens.
+# When Photo 2 arrives inside the same rolling minute as Photo 1 or another
+# organization request, ITPM can be temporarily exhausted. We therefore
+# honor Groq's requested retry delay instead of using a fixed sleep.
+MAX_RATE_LIMIT_RETRIES = 3
+DEFAULT_RETRY_SECONDS = 10.0
+RETRY_BUFFER_SECONDS = 1.5
 
 VISION_SCHEMA = {
     "type": "object",
@@ -99,11 +110,8 @@ def _data_url(data: bytes, filename: str) -> str:
 
 
 def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
-    """
-    Keep downstream app expectations stable even if model wording varies.
-    """
     result = {
-        "image_summary": str(obj.get("image_summary", "") or "")[:600],
+        "image_summary": str(obj.get("image_summary", "") or "")[:500],
         "potential_observations": [],
         "documentation_suggestions": [],
         "limitations": [],
@@ -132,23 +140,23 @@ def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
 
             result["potential_observations"].append(
                 {
-                    "observation": str(item.get("observation", "") or "")[:220],
+                    "observation": str(item.get("observation", "") or "")[:200],
                     "possible_category": category,
                     "confidence": confidence,
-                    "reason": str(item.get("reason", "") or "")[:220],
+                    "reason": str(item.get("reason", "") or "")[:200],
                 }
             )
 
     suggestions = obj.get("documentation_suggestions", [])
     if isinstance(suggestions, list):
         result["documentation_suggestions"] = [
-            str(x)[:200] for x in suggestions[:3] if str(x).strip()
+            str(x)[:180] for x in suggestions[:3] if str(x).strip()
         ]
 
     limitations = obj.get("limitations", [])
     if isinstance(limitations, list):
         result["limitations"] = [
-            str(x)[:200] for x in limitations[:2] if str(x).strip()
+            str(x)[:180] for x in limitations[:2] if str(x).strip()
         ]
 
     return result
@@ -159,9 +167,34 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     return (
         "429" in text
         or "rate_limit_exceeded" in text
+        or "rate limit reached" in text
+        or "input tokens per minute" in text
         or "output tokens per minute" in text
+        or "itpm" in text
         or "otpm" in text
     )
+
+
+def _retry_delay_from_error(exc: Exception) -> float:
+    """
+    Groq rate-limit messages commonly contain:
+      'Please try again in 8.382857142s.'
+    Parse that delay and add a small buffer. If the SDK/provider changes the
+    text, fall back to a safe delay.
+    """
+    text = str(exc)
+
+    patterns = [
+        r"try again in\s+([0-9]+(?:\.[0-9]+)?)s",
+        r"retry[- ]after[:=\s]+([0-9]+(?:\.[0-9]+)?)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return max(float(match.group(1)) + RETRY_BUFFER_SECONDS, 2.0)
+
+    return DEFAULT_RETRY_SECONDS
 
 
 def _run_strict_request(
@@ -186,6 +219,50 @@ def _run_strict_request(
     )
 
 
+def _request_with_adaptive_retry(
+    client: Groq,
+    messages: list[dict[str, Any]],
+):
+    """
+    Retry only provider rate-limit errors.
+    The important change is that we wait for Groq's actual rolling-window reset
+    instead of retrying after a hard-coded 6 seconds.
+    """
+    last_error: Exception | None = None
+
+    for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+        max_tokens = PRIMARY_OUTPUT_TOKENS if attempt == 0 else RETRY_OUTPUT_TOKENS
+
+        try:
+            return _run_strict_request(
+                client=client,
+                messages=messages,
+                max_tokens=max_tokens,
+            )
+
+        except Exception as exc:
+            last_error = exc
+
+            if not _is_rate_limit_error(exc):
+                raise
+
+            if attempt >= MAX_RATE_LIMIT_RETRIES:
+                break
+
+            wait_seconds = _retry_delay_from_error(exc)
+
+            # Small jitter prevents multiple app sessions from retrying
+            # at exactly the same instant.
+            wait_seconds += random.uniform(0.2, 0.8)
+            time.sleep(wait_seconds)
+
+    raise RuntimeError(
+        "Groq vision rate limit remained active after automatic retries. "
+        "Please wait about one minute and try the photograph again. "
+        f"Last provider error: {last_error}"
+    ) from last_error
+
+
 def analyze_image(
     client: Groq,
     data: bytes,
@@ -193,39 +270,37 @@ def analyze_image(
     scene_context: str = "",
 ) -> dict[str, Any]:
     """
-    Production-style hackathon image analysis:
-    - strict schema so provider cannot return malformed JSON
-    - low output-token budget to stay below OTPM limit
-    - one retry for transient rate-limit errors
+    Hackathon-safe image analysis:
+    - qwen/qwen3.8-27b
+    - strict schema (prevents json_validate_failed)
+    - compact output (protects OTPM)
+    - adaptive retry using Groq's own requested delay (protects ITPM/OTPM)
     """
 
     prompt = f"""
 You are MORBIT CSI CaseAssistant's Multimodal Scene Agent.
 This is a human-supervised forensic documentation prototype.
 
-Analyze ONLY what is visibly supportable in the supplied photograph.
+Analyze only what is visibly supportable in the supplied photograph.
 
-Mandatory safety rules:
-- Never identify a person or suspect.
-- Never infer guilt, motive, ethnicity, age, offender profile, or identity.
-- Never confirm that an apparent stain is blood, DNA, narcotics, explosive material,
-  or any other scientifically established substance from the image alone.
-- Never claim a visible mark is a confirmed fingerprint.
-- Never make laboratory findings, firearm-linkage conclusions, toolmark conclusions,
-  cause-of-death findings, or fire-cause determinations.
-- Use cautious language such as visible, apparent, possible, potential, and may warrant examination.
+Rules:
+- Do not identify a person or suspect.
+- Do not infer guilt, motive, ethnicity, age, offender profile, or identity.
+- Do not confirm blood, DNA, narcotics, explosives, fingerprints, toolmarks,
+  firearm relationships, cause of death, fire cause, or laboratory conclusions.
+- Use cautious terms: visible, apparent, possible, potential, may warrant examination.
 - Separate observation from interpretation.
-- The investigator must verify every proposed observation.
+- Every proposed observation requires investigator verification.
 
-Investigator scene context:
+Scene context:
 {scene_context or "No scene context supplied."}
 
-Keep the output concise:
-- image_summary: maximum 2 short sentences.
-- potential_observations: maximum 4 items.
-- documentation_suggestions: maximum 3 short items.
-- limitations: maximum 2 short items.
-- Avoid repetition.
+Be concise:
+- summary: max 2 short sentences
+- observations: max 4
+- documentation suggestions: max 3
+- limitations: max 2
+- no repetition
 """.strip()
 
     messages = [
@@ -241,23 +316,10 @@ Keep the output concise:
         }
     ]
 
-    try:
-        completion = _run_strict_request(
-            client=client,
-            messages=messages,
-            max_tokens=PRIMARY_OUTPUT_TOKENS,
-        )
-    except Exception as exc:
-        if not _is_rate_limit_error(exc):
-            raise
-
-        time.sleep(6)
-
-        completion = _run_strict_request(
-            client=client,
-            messages=messages,
-            max_tokens=RETRY_OUTPUT_TOKENS,
-        )
+    completion = _request_with_adaptive_retry(
+        client=client,
+        messages=messages,
+    )
 
     raw = completion.choices[0].message.content or ""
     parsed = json.loads(raw)
