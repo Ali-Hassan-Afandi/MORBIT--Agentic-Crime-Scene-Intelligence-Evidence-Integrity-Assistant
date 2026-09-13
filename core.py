@@ -249,6 +249,10 @@ def init_state() -> None:
         "intake_saved": False,
         "photo_1_filename": "",
         "confirm_full_clear": False,
+        "visual_verification_saved": False,
+        "search_inputs_saved": False,
+        "evidence_checklist_saved": False,
+        "map_coordinates_saved": False,
         "evidence_checklist_saved": False,
     }
 
@@ -283,6 +287,38 @@ def vision_context(records: list[dict], verified: list[str]) -> str:
         + json.dumps(verified, ensure_ascii=False)
     ).strip()
 
+
+
+def build_case_prompt() -> str:
+    """
+    Consolidate all investigator-entered case intake into one grounded prompt.
+    This is the text supplied to downstream case analysis and RAG retrieval.
+    """
+    scene_type = st.session_state.scene_type
+    if scene_type == "Other / Custom" and st.session_state.custom_scene_type.strip():
+        scene_type = st.session_state.custom_scene_type.strip()
+
+    verified = st.session_state.get("verified_visuals", [])
+    return f"""
+CASE ID: {st.session_state.case_id}
+SCENE TYPE: {scene_type}
+DATE / TIME: {st.session_state.scene_dt}
+LOCATION: {st.session_state.location}
+ENVIRONMENT: {st.session_state.scene_environment}
+SCENE SIZE: {st.session_state.scene_size}
+AVAILABLE SEARCH PERSONNEL: {st.session_state.personnel_count}
+OBSTACLE / COMPLEXITY: {st.session_state.obstacle_level}
+FORENSIC KNOWLEDGE MODE: {st.session_state.agency}
+
+INVESTIGATOR NARRATIVE:
+{st.session_state.desc}
+
+INVESTIGATOR-VERIFIED VISUAL OBSERVATIONS:
+{json.dumps(verified, ensure_ascii=False)}
+
+OPTIONAL FORENSIC QUESTION:
+{st.session_state.investigator_question or "None supplied."}
+""".strip()
 
 def scene_agent(
     client: Groq,
@@ -498,6 +534,10 @@ def clear_analysis_keep_intake() -> None:
         "analysis_errors": [],
         "intake_saved": False,
         "photo_1_filename": "",
+        "visual_verification_saved": False,
+        "search_inputs_saved": False,
+        "evidence_checklist_saved": False,
+        "map_coordinates_saved": False,
     }.items():
         st.session_state[key] = value
 
@@ -610,16 +650,29 @@ def case_snapshot() -> dict[str, Any]:
 
 
 def workflow_status() -> list[dict[str, Any]]:
-    visual_done = False
-    if st.session_state.vision_records:
-        analysis = st.session_state.vision_records[0].get("analysis", {})
-        visual_done = bool(analysis.get("image_summary"))
+    visual_analyzed = bool(
+        st.session_state.vision_records
+        and st.session_state.vision_records[0].get("analysis", {}).get("image_summary")
+    )
+    documentation_done = bool(st.session_state.get("evidence_checklist_saved", False))
+    map_done = bool(st.session_state.scene_map_png) or (
+        st.session_state.evidence_df is None or st.session_state.evidence_df.empty
+    )
 
     return [
-        {"step": 1, "label": "Case Intake", "done": bool(st.session_state.get("intake_saved", False))},
-        {"step": 2, "label": "Visual Review", "done": visual_done},
-        {"step": 3, "label": "Agentic Analysis", "done": bool(st.session_state.scene_analysis)},
-        {"step": 4, "label": "Search & Scene Map", "done": bool(st.session_state.search_plan and st.session_state.scene_map_png)},
-        {"step": 5, "label": "Evidence Integrity", "done": bool(st.session_state.get("evidence_checklist_saved", False))},
-        {"step": 6, "label": "Rich Report", "done": bool(st.session_state.report_docx)},
+        {"step": 1, "label": "Case Details", "done": bool(st.session_state.get("intake_saved", False))},
+        {
+            "step": 2,
+            "label": "Photo & Visual Evidence",
+            "done": bool(visual_analyzed and st.session_state.get("visual_verification_saved", False)),
+        },
+        {"step": 3, "label": "Search Inputs", "done": bool(st.session_state.get("search_inputs_saved", False))},
+        {"step": 4, "label": "Case Analysis", "done": bool(st.session_state.analysis_complete)},
+        {
+            "step": 5,
+            "label": "Documentation & Map",
+            "done": bool(documentation_done and map_done),
+        },
+        {"step": 6, "label": "Draft Report", "done": bool(st.session_state.report_docx)},
     ]
+

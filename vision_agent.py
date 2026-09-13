@@ -11,18 +11,14 @@ from typing import Any
 from PIL import Image
 from groq import Groq
 
-# Primary model: vision + strict structured output.
 PRIMARY_VISION_MODEL = "qwen/qwen3.8-27b"
-
-# Availability fallback: no provider-side JSON validation.
 FALLBACK_VISION_MODEL = "qwen/qwen3.6-27b"
-
-# One-photo workflow allows a richer evidence inventory while staying below
-# the previously observed 1000 OTPM ceiling.
-PRIMARY_OUTPUT_TOKENS = 780
-FALLBACK_OUTPUT_TOKENS = 650
-
 VISION_MODEL = PRIMARY_VISION_MODEL
+
+# One image, one normal vision request. This budget is deliberately kept
+# comfortably below the previously observed 1000 OTPM ceiling.
+PRIMARY_OUTPUT_TOKENS = 620
+FALLBACK_OUTPUT_TOKENS = 520
 
 ALLOWED_CATEGORIES = [
     "biological",
@@ -41,15 +37,13 @@ VISION_SCHEMA = {
     "type": "object",
     "properties": {
         "image_summary": {"type": "string"},
-        "scene_zones_reviewed": {
-            "type": "array",
-            "items": {"type": "string"},
-        },
         "potential_observations": {
             "type": "array",
+            "maxItems": 5,
             "items": {
                 "type": "object",
                 "properties": {
+                    "priority_rank": {"type": "integer", "minimum": 1, "maximum": 5},
                     "observation": {"type": "string"},
                     "location_in_image": {"type": "string"},
                     "possible_category": {
@@ -60,34 +54,34 @@ VISION_SCHEMA = {
                         "type": "string",
                         "enum": ["low", "medium", "high"],
                     },
-                    "reason": {"type": "string"},
+                    "importance_reason": {"type": "string"},
                 },
                 "required": [
+                    "priority_rank",
                     "observation",
                     "location_in_image",
                     "possible_category",
                     "confidence",
-                    "reason",
+                    "importance_reason",
                 ],
                 "additionalProperties": False,
             },
         },
         "documentation_suggestions": {
             "type": "array",
+            "maxItems": 3,
             "items": {"type": "string"},
         },
-        "coverage_note": {"type": "string"},
         "limitations": {
             "type": "array",
+            "maxItems": 2,
             "items": {"type": "string"},
         },
     },
     "required": [
         "image_summary",
-        "scene_zones_reviewed",
         "potential_observations",
         "documentation_suggestions",
-        "coverage_note",
         "limitations",
     ],
     "additionalProperties": False,
@@ -129,42 +123,33 @@ def _extract_json(raw: str) -> dict[str, Any]:
     raw = re.sub(r"\s*```$", "", raw)
 
     try:
-        value = json.loads(raw)
-        if isinstance(value, dict):
-            return value
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            return obj
     except json.JSONDecodeError:
         pass
 
-    start = raw.find("{")
-    end = raw.rfind("}")
+    start, end = raw.find("{"), raw.rfind("}")
     if start != -1 and end > start:
-        value = json.loads(raw[start:end + 1])
-        if isinstance(value, dict):
-            return value
+        obj = json.loads(raw[start:end + 1])
+        if isinstance(obj, dict):
+            return obj
 
     raise RuntimeError("Vision model did not return a usable JSON object.")
 
 
 def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
     result = {
-        "image_summary": str(obj.get("image_summary", "") or "")[:700],
-        "scene_zones_reviewed": [],
+        "image_summary": str(obj.get("image_summary", "") or "")[:600],
         "potential_observations": [],
         "documentation_suggestions": [],
-        "coverage_note": str(obj.get("coverage_note", "") or "")[:400],
         "limitations": [],
     }
 
-    zones = obj.get("scene_zones_reviewed", [])
-    if isinstance(zones, list):
-        result["scene_zones_reviewed"] = [
-            str(x)[:80] for x in zones[:9] if str(x).strip()
-        ]
-
+    seen = set()
     observations = obj.get("potential_observations", [])
     if isinstance(observations, list):
-        seen = set()
-        for item in observations[:10]:
+        for index, item in enumerate(observations[:5], start=1):
             if not isinstance(item, dict):
                 continue
 
@@ -172,11 +157,10 @@ def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
             if not observation:
                 continue
 
-            # Avoid duplicate evidence candidates with trivially different wording.
-            dedupe_key = re.sub(r"\W+", " ", observation.lower()).strip()
-            if dedupe_key in seen:
+            dedupe = re.sub(r"\W+", " ", observation.lower()).strip()
+            if dedupe in seen:
                 continue
-            seen.add(dedupe_key)
+            seen.add(dedupe)
 
             category = str(item.get("possible_category", "other") or "other").lower()
             if category not in ALLOWED_CATEGORIES:
@@ -186,77 +170,82 @@ def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
             if confidence not in {"low", "medium", "high"}:
                 confidence = "low"
 
+            try:
+                rank = int(item.get("priority_rank", index))
+            except Exception:
+                rank = index
+            rank = max(1, min(5, rank))
+
             result["potential_observations"].append({
-                "observation": observation[:240],
-                "location_in_image": str(item.get("location_in_image", "") or "")[:140],
+                "priority_rank": rank,
+                "observation": observation[:220],
+                "location_in_image": str(item.get("location_in_image", "") or "")[:120],
                 "possible_category": category,
                 "confidence": confidence,
-                "reason": str(item.get("reason", "") or "")[:240],
+                "importance_reason": str(item.get("importance_reason", "") or "")[:220],
             })
+
+    result["potential_observations"] = sorted(
+        result["potential_observations"],
+        key=lambda x: x.get("priority_rank", 99),
+    )[:5]
 
     suggestions = obj.get("documentation_suggestions", [])
     if isinstance(suggestions, list):
         result["documentation_suggestions"] = [
-            str(x)[:220] for x in suggestions[:5] if str(x).strip()
+            str(x)[:180] for x in suggestions[:3] if str(x).strip()
         ]
 
     limitations = obj.get("limitations", [])
     if isinstance(limitations, list):
         result["limitations"] = [
-            str(x)[:220] for x in limitations[:3] if str(x).strip()
+            str(x)[:180] for x in limitations[:2] if str(x).strip()
         ]
 
     return result
 
 
-def _base_prompt(scene_context: str) -> str:
+def _prompt(scene_context: str) -> str:
     return f"""
 You are MORBIT CSI CaseAssistant's Multimodal Scene Agent.
-This is a human-supervised forensic documentation prototype.
+This is a human-supervised forensic documentation tool.
 
-Your goal is to perform a SYSTEMATIC VISUAL EVIDENCE SWEEP of the single uploaded
-crime-scene photograph. Do not stop after finding the first obvious object.
+Review the ONE uploaded scene photograph systematically, but return only the FIVE
+MOST IMPORTANT distinct visible potential evidence candidates. If fewer than five
+genuinely supportable candidates are visible, return fewer. Never invent evidence.
 
-VISUAL SWEEP METHOD
-Review the photograph in an orderly sequence:
-1. foreground, middle distance, background
-2. left, centre, right
-3. floor/ground, walls/vertical surfaces, furniture/fixtures, doors/windows/entry-exit areas
-4. loose objects, containers, documents, devices, glass, weapons-like objects, damage,
-   stains/residue-like areas, impressions/patterns, fibres/hair-like material, fragments,
-   discarded items, disturbed surfaces and other objects that may warrant documentation
-5. relationships between visible items and their apparent positions
+PRIORITIZATION
+Rank candidates by practical forensic-documentation importance using:
+1. likely relevance to the described scene/event,
+2. fragility or risk of loss/contamination,
+3. distinctiveness and value for later examination,
+4. relationship to entry/exit, damage, position or other visible items,
+5. clarity/visibility in the photograph.
 
-For every distinct visually supportable potential evidence candidate, create a separate
-observation. Include less obvious candidates when they are genuinely visible. Aim for a
-complete inventory of the photograph, not merely the four most obvious items.
+Before ranking, mentally sweep foreground/middle/background and left/centre/right,
+including floor/ground, doors/windows, furniture, devices, documents, glass/fragments,
+visible stains/residue-like areas, impressions/marks, fibres/hair-like material,
+damage, containers, loose objects and disturbed surfaces.
 
-FORENSIC SAFETY RULES
-- Never identify a person or suspect.
-- Never infer guilt, motive, ethnicity, age, offender profile or identity.
-- Never confirm blood, DNA, narcotics, explosives, fingerprints, toolmarks,
-  firearm relationships, cause of death, fire cause or laboratory conclusions.
-- A stain may be described only as an apparent/possible stain.
-- A mark may be described only as a visible/apparent mark or impression.
-- A weapon-like item may be described by visible form only; do not confirm operability.
-- Use cautious terms: visible, apparent, possible, potential, may warrant examination.
-- Separate direct observation from interpretation.
-- Every proposed observation requires investigator verification.
-- Do not invent an item merely to make the list longer.
+SAFETY
+- Do not identify a person or suspect.
+- Do not infer guilt, motive, ethnicity, age, offender profile or identity.
+- Do not scientifically confirm blood, DNA, drugs, explosives, fingerprints,
+  toolmarks, firearm relationships, cause of death, fire cause or laboratory findings.
+- Use cautious terms such as visible, apparent, possible, potential, may warrant examination.
+- Every item is an AI proposal until an investigator verifies it.
 
-INVESTIGATOR SCENE CONTEXT
-{scene_context or "No scene context supplied."}
+CASE INPUT USED AS CONTEXT
+{scene_context or "No investigator case description supplied."}
 
-OUTPUT EXPECTATIONS
-- image_summary: 2-3 concise sentences
-- scene_zones_reviewed: list the zones/areas actually reviewed
-- potential_observations: up to 10 DISTINCT visible evidence candidates
-- each observation must state where it appears in the image
-- documentation_suggestions: up to 5 practical photography/documentation suggestions
-- coverage_note: briefly state whether the visible scene was systematically reviewed and
-  mention any area obscured, blurred, dark, cropped or impossible to assess
-- limitations: up to 3 concise limitations
-- avoid repetition
+OUTPUT
+- image_summary: maximum 2 concise sentences.
+- potential_observations: maximum 5, ranked 1-5 by importance.
+- location_in_image: concise visible position, e.g. lower-left foreground.
+- importance_reason: one concise sentence.
+- documentation_suggestions: maximum 3.
+- limitations: maximum 2.
+- no repetition.
 """.strip()
 
 
@@ -280,7 +269,7 @@ def _primary_request(client: Groq, messages: list[dict[str, Any]]):
         response_format={
             "type": "json_schema",
             "json_schema": {
-                "name": "morbit_systematic_scene_sweep",
+                "name": "morbit_top_five_visual_evidence",
                 "strict": True,
                 "schema": VISION_SCHEMA,
             },
@@ -289,6 +278,8 @@ def _primary_request(client: Groq, messages: list[dict[str, Any]]):
 
 
 def _fallback_request(client: Groq, messages: list[dict[str, Any]]):
+    # Deliberately no response_format. This avoids provider-side JSON validation
+    # failures previously seen on qwen3.6; JSON is parsed locally instead.
     return client.chat.completions.create(
         model=FALLBACK_VISION_MODEL,
         messages=messages,
@@ -298,13 +289,27 @@ def _fallback_request(client: Groq, messages: list[dict[str, Any]]):
     )
 
 
-def _is_capacity_or_rate_error(exc: Exception) -> bool:
+def _is_rate_limit(exc: Exception) -> bool:
     text = str(exc).lower()
-    return any(term in text for term in [
-        "429", "503", "rate_limit_exceeded", "over capacity",
-        "currently over capacity", "service unavailable",
-        "input tokens per minute", "output tokens per minute", "itpm", "otpm",
+    return any(x in text for x in [
+        "429", "rate_limit_exceeded", "itpm", "otpm",
+        "input tokens per minute", "output tokens per minute",
     ])
+
+
+def _is_capacity(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(x in text for x in [
+        "503", "over capacity", "currently over capacity", "service unavailable",
+    ])
+
+
+def _retry_seconds(exc: Exception) -> float:
+    text = str(exc)
+    m = re.search(r"try again in\s+([0-9]+(?:\.[0-9]+)?)s", text, flags=re.I)
+    if m:
+        return min(max(float(m.group(1)) + 1.2, 2.0), 25.0)
+    return 8.0
 
 
 def analyze_image(
@@ -314,45 +319,31 @@ def analyze_image(
     scene_context: str = "",
 ) -> dict[str, Any]:
     """
-    One-photo systematic evidence sweep.
-
-    - One vision call in the normal path.
-    - Rich enough output for up to 10 evidence candidates.
-    - Qwen 3.8 strict schema first.
-    - Qwen 3.6 plain-text JSON fallback only during provider pressure.
+    Reliable single-photo path:
+    - normal path = one Qwen 3.8 request;
+    - 429 = respect provider retry window and retry once;
+    - 503/structured-output provider pressure = Qwen 3.6 plain JSON fallback.
     """
-    prompt = _base_prompt(scene_context)
+    prompt = _prompt(scene_context)
     messages = _messages(prompt, data, filename)
 
     try:
         completion = _primary_request(client, messages)
         raw = completion.choices[0].message.content or ""
         return _normalize_result(json.loads(raw))
-    except Exception as primary_exc:
-        if not _is_capacity_or_rate_error(primary_exc):
+    except Exception as exc:
+        if _is_rate_limit(exc):
+            time.sleep(_retry_seconds(exc))
+            completion = _primary_request(client, messages)
+            raw = completion.choices[0].message.content or ""
+            return _normalize_result(json.loads(raw))
+        if not _is_capacity(exc) and "json" not in str(exc).lower():
             raise
 
     fallback_prompt = prompt + """
-
-Return ONE compact JSON object only with these exact keys:
-image_summary, scene_zones_reviewed, potential_observations,
-documentation_suggestions, coverage_note, limitations.
-
-Each potential_observations item must contain:
-observation, location_in_image, possible_category, confidence, reason.
+Return exactly one compact JSON object with the requested keys.
 Do not use markdown or code fences.
 """.strip()
-    fallback_messages = _messages(fallback_prompt, data, filename)
-
-    try:
-        completion = _fallback_request(client, fallback_messages)
-        raw = completion.choices[0].message.content or ""
-        return _normalize_result(_extract_json(raw))
-    except Exception as fallback_exc:
-        if not _is_capacity_or_rate_error(fallback_exc):
-            raise
-
-        time.sleep(4)
-        completion = _fallback_request(client, fallback_messages)
-        raw = completion.choices[0].message.content or ""
-        return _normalize_result(_extract_json(raw))
+    completion = _fallback_request(client, _messages(fallback_prompt, data, filename))
+    raw = completion.choices[0].message.content or ""
+    return _normalize_result(_extract_json(raw))

@@ -1,0 +1,32 @@
+{
+  "compiled_files": [
+    "app.py",
+    "core.py",
+    "rag_engine.py",
+    "report_builder.py",
+    "scene_map.py",
+    "ui.py",
+    "vision_agent.py"
+  ],
+  "checks": {
+    "all_python_compiles": true,
+    "single_page_no_pages_directory": true,
+    "three_case_intake_tabs": true,
+    "vision_max_5": true,
+    "vision_normal_budget_620": true,
+    "image_persisted_before_analysis": true,
+    "visual_confirmation_same_photo_section": true,
+    "case_prompt_builder": true,
+    "search_inputs_under_case_workspace": true,
+    "documentation_checklist": true,
+    "completeness_score": true,
+    "xy_coordinate_form": true,
+    "map_generation": true,
+    "single_report_generation_action": true,
+    "download_after_draft": true,
+    "no_visible_v5": true,
+    "functional_map_png": true,
+    "functional_docx_with_photo_and_map": true
+  },
+  "all_checks_passed": true
+}

@@ -168,7 +168,13 @@ def build_rich_report(
                 _cell(t.cell(1,j),v,size=8); _shade(t.cell(1,j),PALE)
             p=doc.add_paragraph(); p.add_run("AI visual summary: ").bold=True; p.add_run(a.get("image_summary","") or "Visual AI analysis was not available; the original saved photograph is retained in this report.")
             for obs in a.get("potential_observations",[]):
-                _bullet(doc,f"{obs.get('observation','')} — confidence: {obs.get('confidence','')} — category: {obs.get('possible_category','other')}")
+                rank=obs.get("priority_rank","")
+                location=obs.get("location_in_image","")
+                importance=obs.get("importance_reason","")
+                text=f"Priority {rank}: {obs.get('observation','')} — location: {location} — confidence: {obs.get('confidence','')} — category: {obs.get('possible_category','other')}"
+                if importance:
+                    text += f" — importance: {importance}"
+                _bullet(doc,text)
             if a.get("limitations"):
                 p=doc.add_paragraph(); p.add_run("Limitations: ").bold=True; p.add_run("; ".join(a["limitations"]))
 
