@@ -1,31 +1,34 @@
-# MORBIT CSI CaseAssistant — Final Right-Rail Build
+# MORBIT CSI CaseAssistant — Source-Grounded Operational Guidance Build
 
-## Interface
-The native Streamlit sidebar is removed.
+This build keeps the finalized single-page workflow, fixed right progress rail,
+five-candidate vision limit and death-scene body-first prioritization.
 
-Desktop:
-- permanent fixed progress rail on the right
-- main workflow remains visible beside it
+## New operational guidance stage
+After Case Analysis and before the evidence checklist/report, MORBIT now displays
+the source-grounded NFA/PFSA forensic guidance directly in the application.
 
-Tablet/mobile:
-- the same progress component becomes a fixed bottom strip automatically
+The guidance is organized into:
+- Immediate Scene Procedure
+- Evidence-Specific Handling
+- Photography and Documentation
+- Packaging Preservation Sealing
+- Chain of Custody
+- Submission and Laboratory Requirements
+- Required Forms and Prerequisites
+- Fees and Payment
+- NFA / PFSA Differences
+- Source Limitations and Investigator Checks
 
-## Vision
-- one scene photograph
-- maximum five ranked visual evidence candidates
-- primary output budget: 620 tokens
-- Qwen 3.8 strict structured output primary
-- Qwen 3.6 plain-JSON fallback during provider pressure
+## Retrieval improvement
+Retrieval is balanced across four source needs:
+1. procedure/SOP
+2. forms/prerequisites
+3. fees/payment/challan
+4. chain-of-custody/submission
 
-### Homicide / murder / suspicious-death / human-remains scenes
-MORBIT uses body-first priority:
-1. inspect the full photograph for every visually supportable possible human body/body-like form/possible human remains
-2. put those candidates first
-3. use any remaining positions, up to five total, for other high-priority evidence
+Claims must remain grounded in retrieved source excerpts and use [S1], [S2], etc.
+If a form, fee, amount, payment method or requirement is not established in the
+retrieved source material, MORBIT must state that it is not established rather
+than inventing it.
 
-The image model does not confirm death, identity, cause/manner/time of death or laboratory findings.
-
-## Guided workflow
-Case Details → Photograph + Immediate Investigator Verification → Search Inputs →
-Case Analysis → Documentation Completeness → X/Y Coordinates → Scene Map →
-Generate Draft → Download Word Report.
+The same guidance and references are still included in the final Word report.

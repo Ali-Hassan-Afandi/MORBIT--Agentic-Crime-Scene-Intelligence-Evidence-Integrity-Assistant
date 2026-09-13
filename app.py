@@ -495,6 +495,83 @@ def evidence_card(obs: dict):
     )
 
 
+
+GUIDANCE_SECTION_TITLES = {
+    "Immediate Scene Procedure",
+    "Evidence-Specific Handling",
+    "Photography and Documentation",
+    "Packaging Preservation Sealing",
+    "Chain of Custody",
+    "Submission and Laboratory Requirements",
+    "Required Forms and Prerequisites",
+    "Fees and Payment",
+    "NFA / PFSA Differences",
+    "Source Limitations and Investigator Checks",
+}
+
+
+def render_grounded_guidance(guidance: str, sources: list[dict]):
+    """Render procedural guidance as an in-workflow operational brief."""
+    st.markdown("## Source-Grounded Forensic Guidance")
+    st.caption(
+        "Use this guidance while working the case, before report generation. "
+        "Procedures, forms, fees and submission requirements are shown only when supported "
+        "by the locally retrieved NFA/PFSA sources."
+    )
+
+    if not guidance:
+        st.warning(
+            "No source-grounded guidance is currently available for this case. "
+            "Check the knowledge/NFA and knowledge/PFSA source files and rerun Case Analysis."
+        )
+        return
+
+    st.markdown(
+        '<div class="ready-box"><b>Operational source brief is ready.</b><br>'
+        'Review these requirements before completing the evidence checklist, scene map and draft report. '
+        'Any item marked as not established must be verified from the current controlling agency source.</div>',
+        unsafe_allow_html=True,
+    )
+
+    lines = [line.strip() for line in guidance.splitlines()]
+    current_section = None
+
+    for line in lines:
+        if not line:
+            continue
+
+        if line in GUIDANCE_SECTION_TITLES:
+            current_section = line
+            st.markdown(f"### {line}")
+            continue
+
+        if line.startswith("- "):
+            st.markdown("• " + line[2:].strip())
+        else:
+            # Some model outputs may omit the hyphen despite the prompt.
+            st.write(line)
+
+    if sources:
+        with st.expander(f"Retrieved source references ({len(sources)})", expanded=False):
+            for i, source in enumerate(sources, start=1):
+                title = source.get("title", "Untitled source")
+                agency = source.get("agency", "")
+                doc_type = source.get("document_type", "")
+                page = source.get("page") or "N/A"
+                verification = source.get("verification", "")
+                score = source.get("score")
+                st.markdown(f"**[S{i}] {title}**")
+                st.caption(
+                    f"Agency: {agency}  •  Type: {doc_type}  •  Page: {page}  "
+                    f"•  Verification: {verification}"
+                    + (f"  •  Retrieval score: {score:.3f}" if isinstance(score, (int, float)) else "")
+                )
+                if source.get("url"):
+                    st.write(source["url"])
+                st.divider()
+    else:
+        st.info("No retrieved source references are attached to this guidance.")
+
 st.set_page_config(
     page_title=APP_NAME,
     page_icon="🛡️",
@@ -979,7 +1056,7 @@ if st.button(
         for err in st.session_state.analysis_errors:
             st.write("•", err)
     if st.session_state.analysis_complete:
-        st.success("Case analysis complete. Continue to documentation completeness below.")
+        st.success("Case analysis complete. Review the source-grounded forensic guidance below before continuing to documentation completeness.")
 
 if st.session_state.scene_analysis:
     with st.expander("Scene analysis summary", expanded=True):
@@ -988,6 +1065,17 @@ if st.session_state.scene_analysis:
             st.markdown("**Potential hazards / cautions**")
             for x in st.session_state.scene_analysis["hazards"]:
                 st.write("•", x)
+
+
+# ------------------------------------------------------------------
+# SOURCE-GROUNDED GUIDANCE — SHOWN DURING CASE WORK
+# ------------------------------------------------------------------
+if st.session_state.analysis_complete:
+    st.divider()
+    render_grounded_guidance(
+        st.session_state.guidance,
+        st.session_state.sources,
+    )
 
 # ------------------------------------------------------------------
 # STEP 5A — DOCUMENTATION COMPLETENESS

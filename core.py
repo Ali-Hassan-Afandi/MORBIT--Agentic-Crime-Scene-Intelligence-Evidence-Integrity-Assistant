@@ -382,65 +382,156 @@ def retrieve_guidance(
     verified_visuals: list[str],
     user_question: str = "",
 ):
+    """
+    Retrieve a balanced set of source excerpts so operational procedure, forms,
+    fees/payment, packaging/preservation and chain-of-custody material all have
+    a chance to appear before the final report is generated.
+
+    Claims remain limited to the retrieved NFA/PFSA material. If the local
+    knowledge base does not establish a requirement, the answer must say so.
+    """
     evidence_terms = ", ".join(
         f"{x.get('item')} ({x.get('category')}; basis={x.get('basis','')})"
         for x in analysis.get("potential_evidence", [])
     )
     image_context = vision_context(vision_records, verified_visuals)
 
-    query = (
-        f"{agency} forensic procedure SOP guideline evidence collection packaging sealing "
-        f"submission chain of custody search documentation scene: {desc}. "
-        f"Potential evidence: {evidence_terms}. Image context: {image_context}. "
-        f"Question: {user_question}"
+    base_case = (
+        f"Authority={agency}. Scene={desc}. "
+        f"Potential evidence={evidence_terms}. "
+        f"Verified/image context={image_context}. "
+        f"Investigator question={user_question or 'general case procedure'}."
     )
-    results = rag.search(query, k=10)
+
+    # Category-balanced retrieval is more reliable than one broad query for
+    # surfacing forms and fees that may otherwise rank below general SOP text.
+    queries = [
+        (
+            "procedure",
+            f"{base_case} crime scene procedure SOP sequence documentation "
+            f"collection preservation packaging sealing handling submission"
+        ),
+        (
+            "forms",
+            f"{base_case} request form submission form evidence form requisition "
+            f"challan application proforma prerequisite required documents"
+        ),
+        (
+            "fees",
+            f"{base_case} fee fees payment charges schedule challan bank payment "
+            f"forensic examination submission cost"
+        ),
+        (
+            "custody",
+            f"{base_case} chain of custody seal labeling transfer receipt dispatch "
+            f"storage submission integrity documentation"
+        ),
+    ]
+
+    combined: list[dict[str, Any]] = []
+    seen: set[tuple] = set()
+
+    for _, query in queries:
+        for item in rag.search(query, k=5):
+            key = (
+                item.get("source_id"),
+                item.get("page"),
+                item.get("chunk"),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            combined.append(item)
+
+    # Keep context bounded while retaining balanced retrieval order.
+    results = combined[:16]
     context = make_context(results)
 
     system = """
-You are MORBIT CSI CaseAssistant's Forensic Knowledge Retrieval Agent.
-Use ONLY supplied retrieved excerpts for procedural, packaging, preservation,
-submission, form, fee, sealing, chain-of-custody or agency-specific claims.
+You are MORBIT CSI CaseAssistant's Source-Grounded Forensic Guidance Agent.
 
-Image-derived content is context, not scientific confirmation. Distinguish AI-proposed
-visual observations from investigator-verified observations.
+Use ONLY the supplied retrieved NFA/PFSA excerpts for claims about:
+- crime-scene procedure
+- evidence handling
+- collection
+- photography/documentation
+- packaging and preservation
+- sealing and labeling
+- chain of custody
+- storage/dispatch/submission
+- forensic forms, requisitions, challans or prerequisites
+- fees, charges, payment methods or fee schedules
+- agency-specific requirements
 
-Requirements:
-1. Cite material procedural claims with [S1], [S2], etc.
-2. Clearly distinguish NFA from PFSA material.
-3. Do not merge conflicting requirements.
-4. Do not invent procedures, laws, forms, fees, versions or authorities.
-5. Say when retrieved sources do not establish a requirement.
-6. Keep all recommendations advisory and human-supervised.
-7. Return plain professional text only. Do NOT use Markdown heading markers (#), bold markers (**), underscores for emphasis, code fences, or Markdown tables.
-8. Use short section titles on their own lines and simple hyphen bullet points for recommendations.
+CRITICAL GROUNDING RULES
+1. Cite every material procedural, form, fee, payment, packaging, preservation,
+   sealing, submission or chain-of-custody claim with [S1], [S2], etc.
+2. Clearly distinguish NFA material from PFSA material.
+3. Never merge conflicting requirements. State the difference.
+4. Never invent a procedure, law, form name/number, fee, amount, version,
+   authority, laboratory requirement or payment method.
+5. If the retrieved sources do not establish a form, fee, amount, procedure or
+   requirement, explicitly say: "Not established in the retrieved sources."
+6. If a fee is mentioned without a current amount, do not guess the amount.
+7. If a form is mentioned without a form number/title, do not invent one.
+8. Image-derived content is context only and is not scientific confirmation.
+9. All guidance is advisory and subject to investigator/supervisor and current
+   agency SOP/legal requirements.
+10. Return plain professional text only. Do not use Markdown heading markers,
+    bold markers, code fences or tables.
+11. Use the EXACT section titles below on their own lines and simple hyphen
+    bullets underneath each section.
+
+REQUIRED OUTPUT SECTIONS
+Immediate Scene Procedure
+Evidence-Specific Handling
+Photography and Documentation
+Packaging Preservation Sealing
+Chain of Custody
+Submission and Laboratory Requirements
+Required Forms and Prerequisites
+Fees and Payment
+NFA / PFSA Differences
+Source Limitations and Investigator Checks
 """.strip()
 
     user = f"""
 Selected authority: {agency}
-Scene description: {desc}
-Potential evidence: {evidence_terms}
 
-IMAGE ANALYSIS CONTEXT:
+COMPLETE CASE CONTEXT:
+{desc}
+
+POTENTIAL EVIDENCE:
+{evidence_terms or "No potential evidence inventory available."}
+
+IMAGE / INVESTIGATOR-VERIFIED CONTEXT:
 {image_context}
 
-Question:
-{user_question or "Provide relevant procedural and evidence-integrity guidance."}
+INVESTIGATOR QUESTION:
+{user_question or "Provide the source-grounded procedures, forms, prerequisites, fees/payment information, evidence handling and submission requirements relevant to this case."}
 
 RETRIEVED SOURCES:
 {context}
 
-Produce:
-- Relevant procedural guidance
-- Image-aware documentation considerations
-- Packaging/preservation considerations only when supported
-- Submission/form considerations only when supported
-- Chain-of-custody considerations only when supported
-- Source limitations
+Prepare an operational, case-working guidance brief using every REQUIRED OUTPUT SECTION.
+For each section:
+- state what the investigator should check/do only when supported by retrieved text;
+- cite the supporting source number(s);
+- identify the agency where relevant;
+- explicitly state "Not established in the retrieved sources." when evidence is absent.
+
+For Fees and Payment specifically:
+- state any supported fee, charge, payment/challan requirement, amount or payment
+  method exactly as established by sources;
+- otherwise state that the fee/amount/payment detail is not established in the
+  retrieved sources and should be verified from the current agency source before submission.
+
+For Required Forms and Prerequisites specifically:
+- list supported form/requisition/challan/prerequisite names and requirements;
+- never invent missing form numbers or titles.
 """.strip()
 
     return groq_text(client, system, user), results
-
 
 def evidence_dataframe(analysis: dict) -> pd.DataFrame:
     rows = []

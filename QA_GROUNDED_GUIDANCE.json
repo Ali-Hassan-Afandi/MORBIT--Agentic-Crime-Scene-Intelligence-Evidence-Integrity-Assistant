@@ -1,0 +1,28 @@
+{
+  "compiled": {
+    "app.py": true,
+    "core.py": true,
+    "vision_agent.py": true,
+    "rag_engine.py": true,
+    "report_builder.py": true,
+    "scene_map.py": true
+  },
+  "checks": {
+    "all_runtime_files_compile": true,
+    "guidance_renderer_present": true,
+    "guidance_shown_before_step5": true,
+    "forms_section_required": true,
+    "fees_section_required": true,
+    "explicit_no_invention_rule": true,
+    "balanced_retrieval_procedure": true,
+    "balanced_retrieval_forms": true,
+    "balanced_retrieval_fees": true,
+    "balanced_retrieval_custody": true,
+    "source_refs_shown_in_app": true,
+    "guidance_still_in_report": true,
+    "right_rail_render_fix_preserved": true,
+    "vision_max_five_preserved": true,
+    "death_scene_body_first_preserved": true
+  },
+  "all_checks_passed": true
+}
