@@ -1,0 +1,31 @@
+{
+  "compiled_files": [
+    "app.py",
+    "core.py",
+    "rag_engine.py",
+    "report_builder.py",
+    "scene_map.py",
+    "ui.py",
+    "vision_agent.py"
+  ],
+  "checks": {
+    "all_python_files_compile": true,
+    "native_sidebar_hidden": true,
+    "permanent_right_rail": true,
+    "responsive_bottom_tracker": true,
+    "app_uses_progress_rail": true,
+    "vision_max_five": true,
+    "body_category_present": true,
+    "death_scene_detection": true,
+    "body_first_prompt": true,
+    "defensive_body_first_sort": true,
+    "scene_type_passed_to_vision": true,
+    "death_scene_ui_warning": true,
+    "single_page_workflow": true,
+    "no_visible_v5_runtime": true,
+    "functional_body_first_normalization": true,
+    "functional_map_png": true,
+    "functional_docx_with_photo_and_map": true
+  },
+  "all_checks_passed": true
+}

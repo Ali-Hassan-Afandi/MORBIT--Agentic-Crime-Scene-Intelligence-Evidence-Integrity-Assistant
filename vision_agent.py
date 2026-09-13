@@ -15,12 +15,11 @@ PRIMARY_VISION_MODEL = "qwen/qwen3.8-27b"
 FALLBACK_VISION_MODEL = "qwen/qwen3.6-27b"
 VISION_MODEL = PRIMARY_VISION_MODEL
 
-# One image, one normal vision request. This budget is deliberately kept
-# comfortably below the previously observed 1000 OTPM ceiling.
 PRIMARY_OUTPUT_TOKENS = 620
 FALLBACK_OUTPUT_TOKENS = 520
 
 ALLOWED_CATEGORIES = [
+    "possible_human_body_or_remains",
     "biological",
     "digital",
     "latent_print",
@@ -37,6 +36,10 @@ VISION_SCHEMA = {
     "type": "object",
     "properties": {
         "image_summary": {"type": "string"},
+        "scene_priority_mode": {
+            "type": "string",
+            "enum": ["death_scene_body_first", "general_scene"],
+        },
         "potential_observations": {
             "type": "array",
             "maxItems": 5,
@@ -80,6 +83,7 @@ VISION_SCHEMA = {
     },
     "required": [
         "image_summary",
+        "scene_priority_mode",
         "potential_observations",
         "documentation_suggestions",
         "limitations",
@@ -123,31 +127,52 @@ def _extract_json(raw: str) -> dict[str, Any]:
     raw = re.sub(r"\s*```$", "", raw)
 
     try:
-        obj = json.loads(raw)
-        if isinstance(obj, dict):
-            return obj
+        value = json.loads(raw)
+        if isinstance(value, dict):
+            return value
     except json.JSONDecodeError:
         pass
 
     start, end = raw.find("{"), raw.rfind("}")
     if start != -1 and end > start:
-        obj = json.loads(raw[start:end + 1])
-        if isinstance(obj, dict):
-            return obj
+        value = json.loads(raw[start:end + 1])
+        if isinstance(value, dict):
+            return value
 
     raise RuntimeError("Vision model did not return a usable JSON object.")
 
 
-def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
+def _looks_like_death_scene(scene_type: str, scene_context: str) -> bool:
+    text = f"{scene_type}\n{scene_context}".lower()
+    death_terms = [
+        "homicide",
+        "murder",
+        "suspicious death",
+        "death scene",
+        "human remains",
+        "body/remains",
+        "body remains",
+        "corpse",
+        "deceased",
+    ]
+    return any(term in text for term in death_terms)
+
+
+def _normalize_result(obj: dict[str, Any], death_scene: bool) -> dict[str, Any]:
     result = {
         "image_summary": str(obj.get("image_summary", "") or "")[:600],
+        "scene_priority_mode": (
+            "death_scene_body_first" if death_scene else "general_scene"
+        ),
         "potential_observations": [],
         "documentation_suggestions": [],
         "limitations": [],
     }
 
-    seen = set()
     observations = obj.get("potential_observations", [])
+    seen = set()
+    normalized = []
+
     if isinstance(observations, list):
         for index, item in enumerate(observations[:5], start=1):
             if not isinstance(item, dict):
@@ -176,7 +201,7 @@ def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
                 rank = index
             rank = max(1, min(5, rank))
 
-            result["potential_observations"].append({
+            normalized.append({
                 "priority_rank": rank,
                 "observation": observation[:220],
                 "location_in_image": str(item.get("location_in_image", "") or "")[:120],
@@ -185,10 +210,22 @@ def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
                 "importance_reason": str(item.get("importance_reason", "") or "")[:220],
             })
 
-    result["potential_observations"] = sorted(
-        result["potential_observations"],
-        key=lambda x: x.get("priority_rank", 99),
-    )[:5]
+    if death_scene:
+        body_items = [
+            x for x in normalized
+            if x["possible_category"] == "possible_human_body_or_remains"
+        ]
+        other_items = [
+            x for x in normalized
+            if x["possible_category"] != "possible_human_body_or_remains"
+        ]
+        normalized = body_items + other_items
+
+    normalized = normalized[:5]
+    for i, item in enumerate(normalized, start=1):
+        item["priority_rank"] = i
+
+    result["potential_observations"] = normalized
 
     suggestions = obj.get("documentation_suggestions", [])
     if isinstance(suggestions, list):
@@ -205,43 +242,74 @@ def _normalize_result(obj: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _prompt(scene_context: str) -> str:
+def _prompt(scene_context: str, scene_type: str) -> str:
+    death_scene = _looks_like_death_scene(scene_type, scene_context)
+
+    death_priority = """
+DEATH / MURDER SCENE PRIORITY MODE
+The investigator's scene type indicates a homicide, murder, suspicious-death or human-remains scene.
+
+FIRST PRIORITY:
+- Before ranking any other evidence, systematically inspect the entire photograph for EVERY
+  visually supportable possible human body, body-like form, or possible human remains.
+- Put those candidates FIRST in the output.
+- Use the category: possible_human_body_or_remains.
+- Do NOT state that a person is dead merely from the photograph.
+- Use cautious wording such as "possible human body", "person-like form", or
+  "possible human remains" unless investigator context independently establishes status.
+- Do not infer cause, manner or time of death.
+- After all visible possible body/remains candidates have been included, use any remaining
+  slots (up to five total candidates) for the most important other visible evidence.
+- If five possible body/remains candidates occupy all five slots, return no other evidence.
+""" if death_scene else """
+GENERAL SCENE PRIORITY MODE
+Rank the five most important distinct visible potential evidence candidates using scene relevance,
+fragility/risk of loss, distinctiveness, relationship to damage or entry/exit, and visual clarity.
+"""
+
     return f"""
 You are MORBIT CSI CaseAssistant's Multimodal Scene Agent.
 This is a human-supervised forensic documentation tool.
 
-Review the ONE uploaded scene photograph systematically, but return only the FIVE
-MOST IMPORTANT distinct visible potential evidence candidates. If fewer than five
-genuinely supportable candidates are visible, return fewer. Never invent evidence.
+Review the ONE uploaded scene photograph systematically and return a MAXIMUM of FIVE
+distinct visible potential evidence candidates. If fewer than five are genuinely supportable,
+return fewer. Never invent evidence.
 
-PRIORITIZATION
-Rank candidates by practical forensic-documentation importance using:
-1. likely relevance to the described scene/event,
-2. fragility or risk of loss/contamination,
-3. distinctiveness and value for later examination,
-4. relationship to entry/exit, damage, position or other visible items,
-5. clarity/visibility in the photograph.
+{death_priority}
 
-Before ranking, mentally sweep foreground/middle/background and left/centre/right,
-including floor/ground, doors/windows, furniture, devices, documents, glass/fragments,
-visible stains/residue-like areas, impressions/marks, fibres/hair-like material,
-damage, containers, loose objects and disturbed surfaces.
+SYSTEMATIC VISUAL SWEEP
+Before ranking, inspect foreground/middle/background and left/centre/right, including:
+- floor/ground
+- doors, windows and entry/exit points
+- furniture and fixtures
+- devices and documents
+- glass/fragments
+- visible stains or residue-like areas
+- impressions/marks
+- fibres/hair-like material
+- damage
+- containers and loose objects
+- disturbed surfaces
+- weapon-like objects by visible form only
 
-SAFETY
+FORENSIC SAFETY
 - Do not identify a person or suspect.
-- Do not infer guilt, motive, ethnicity, age, offender profile or identity.
+- Do not infer guilt, motive, ethnicity, age or offender profile.
 - Do not scientifically confirm blood, DNA, drugs, explosives, fingerprints,
   toolmarks, firearm relationships, cause of death, fire cause or laboratory findings.
-- Use cautious terms such as visible, apparent, possible, potential, may warrant examination.
+- Use cautious terms: visible, apparent, possible, potential, may warrant examination.
 - Every item is an AI proposal until an investigator verifies it.
 
-CASE INPUT USED AS CONTEXT
+SCENE TYPE
+{scene_type or "Not specified"}
+
+COMPLETE SAVED CASE INPUT
 {scene_context or "No investigator case description supplied."}
 
-OUTPUT
+OUTPUT RULES
 - image_summary: maximum 2 concise sentences.
-- potential_observations: maximum 5, ranked 1-5 by importance.
-- location_in_image: concise visible position, e.g. lower-left foreground.
+- potential_observations: maximum 5.
+- location_in_image: concise position such as lower-left foreground.
 - importance_reason: one concise sentence.
 - documentation_suggestions: maximum 3.
 - limitations: maximum 2.
@@ -278,8 +346,6 @@ def _primary_request(client: Groq, messages: list[dict[str, Any]]):
 
 
 def _fallback_request(client: Groq, messages: list[dict[str, Any]]):
-    # Deliberately no response_format. This avoids provider-side JSON validation
-    # failures previously seen on qwen3.6; JSON is parsed locally instead.
     return client.chat.completions.create(
         model=FALLBACK_VISION_MODEL,
         messages=messages,
@@ -306,9 +372,9 @@ def _is_capacity(exc: Exception) -> bool:
 
 def _retry_seconds(exc: Exception) -> float:
     text = str(exc)
-    m = re.search(r"try again in\s+([0-9]+(?:\.[0-9]+)?)s", text, flags=re.I)
-    if m:
-        return min(max(float(m.group(1)) + 1.2, 2.0), 25.0)
+    match = re.search(r"try again in\s+([0-9]+(?:\.[0-9]+)?)s", text, flags=re.I)
+    if match:
+        return min(max(float(match.group(1)) + 1.2, 2.0), 25.0)
     return 8.0
 
 
@@ -317,26 +383,23 @@ def analyze_image(
     data: bytes,
     filename: str,
     scene_context: str = "",
+    scene_type: str = "",
 ) -> dict[str, Any]:
-    """
-    Reliable single-photo path:
-    - normal path = one Qwen 3.8 request;
-    - 429 = respect provider retry window and retry once;
-    - 503/structured-output provider pressure = Qwen 3.6 plain JSON fallback.
-    """
-    prompt = _prompt(scene_context)
+    death_scene = _looks_like_death_scene(scene_type, scene_context)
+    prompt = _prompt(scene_context, scene_type)
     messages = _messages(prompt, data, filename)
 
     try:
         completion = _primary_request(client, messages)
         raw = completion.choices[0].message.content or ""
-        return _normalize_result(json.loads(raw))
+        return _normalize_result(json.loads(raw), death_scene)
     except Exception as exc:
         if _is_rate_limit(exc):
             time.sleep(_retry_seconds(exc))
             completion = _primary_request(client, messages)
             raw = completion.choices[0].message.content or ""
-            return _normalize_result(json.loads(raw))
+            return _normalize_result(json.loads(raw), death_scene)
+
         if not _is_capacity(exc) and "json" not in str(exc).lower():
             raise
 
@@ -344,6 +407,10 @@ def analyze_image(
 Return exactly one compact JSON object with the requested keys.
 Do not use markdown or code fences.
 """.strip()
-    completion = _fallback_request(client, _messages(fallback_prompt, data, filename))
+
+    completion = _fallback_request(
+        client,
+        _messages(fallback_prompt, data, filename),
+    )
     raw = completion.choices[0].message.content or ""
-    return _normalize_result(_extract_json(raw))
+    return _normalize_result(_extract_json(raw), death_scene)

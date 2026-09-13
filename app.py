@@ -22,18 +22,18 @@ from core import (
 from vision_agent import analyze_image, image_metadata
 from scene_map import generate_scene_map
 from report_builder import build_rich_report
-from ui import apply_ui, hero, guided_sidebar, evidence_card
+from ui import apply_ui, hero, progress_rail, evidence_card
 
 st.set_page_config(
     page_title=APP_NAME,
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 apply_ui()
 init_state()
-guided_sidebar()
+progress_rail()
 
 hero(
     "Enter all case inputs in one Case Intake workspace, verify the five highest-priority "
@@ -245,11 +245,18 @@ with tab_photo:
                 try:
                     with st.spinner("Reviewing the photograph and ranking the five most important visible evidence candidates..."):
                         client = client_from_secrets()
+                        effective_scene_type = (
+                            st.session_state.custom_scene_type
+                            if st.session_state.scene_type == "Other / Custom"
+                            and st.session_state.custom_scene_type
+                            else st.session_state.scene_type
+                        )
                         visual = analyze_image(
                             client,
                             record["image_bytes"],
                             record["metadata"]["filename"],
                             build_case_prompt(),
+                            effective_scene_type,
                         )
                     st.session_state.vision_records[0]["analysis"] = visual
                     st.session_state.verified_visuals = []
@@ -272,6 +279,13 @@ with tab_photo:
 
                 observations = analysis.get("potential_observations", [])
                 st.metric("Ranked visual candidates", len(observations))
+
+                if analysis.get("scene_priority_mode") == "death_scene_body_first":
+                    st.warning(
+                        "Death-scene priority mode: MORBIT checks the whole photograph for every "
+                        "visually supportable possible human body/body-like form/possible human remains "
+                        "before ranking other evidence. Image appearance alone does not confirm death."
+                    )
 
                 st.markdown("#### Investigator Confirmation")
                 st.caption(

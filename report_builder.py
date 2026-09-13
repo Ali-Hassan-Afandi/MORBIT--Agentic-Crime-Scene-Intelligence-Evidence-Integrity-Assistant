@@ -167,6 +167,10 @@ def build_rich_report(
                 _cell(t.cell(0,j),k,True,WHITE,8); _shade(t.cell(0,j),BLUE)
                 _cell(t.cell(1,j),v,size=8); _shade(t.cell(1,j),PALE)
             p=doc.add_paragraph(); p.add_run("AI visual summary: ").bold=True; p.add_run(a.get("image_summary","") or "Visual AI analysis was not available; the original saved photograph is retained in this report.")
+            if a.get("scene_priority_mode") == "death_scene_body_first":
+                p=doc.add_paragraph()
+                p.add_run("Visual priority mode: ").bold=True
+                p.add_run("Death-scene body/remains-first review; visual appearance alone does not confirm death.")
             for obs in a.get("potential_observations",[]):
                 rank=obs.get("priority_rank","")
                 location=obs.get("location_in_image","")
