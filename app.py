@@ -19,6 +19,7 @@ from core import (
     integrity_score,
     case_snapshot,
     build_case_prompt,
+    workflow_status,
 )
 from vision_agent import analyze_image, image_metadata
 from scene_map import generate_scene_map

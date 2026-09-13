@@ -1,0 +1,52 @@
+{
+  "checks": {
+    "all_runtime_files_compile": true,
+    "workflow_status_imported": true,
+    "workflow_status_exists_in_core": true,
+    "no_ui_import": true,
+    "ui_file_removed": true,
+    "right_rail_embedded": true,
+    "death_scene_vision_preserved": true,
+    "vision_max_five_preserved": true,
+    "requirements_present": true,
+    "legacy_pages_absent": true
+  },
+  "compile_results": {
+    "app.py": true,
+    "core.py": true,
+    "rag_engine.py": true,
+    "report_builder.py": true,
+    "scene_map.py": true,
+    "vision_agent.py": true
+  },
+  "undefined_name_scan_note": "Conservative AST scan was run in addition to py_compile. Python compile alone cannot catch runtime NameError.",
+  "undefined_name_scan_filtered": {
+    "app.py": [
+      "a",
+      "alerts",
+      "b",
+      "c",
+      "c1",
+      "c2",
+      "c3",
+      "d",
+      "guidance",
+      "idx",
+      "ok",
+      "score",
+      "sources",
+      "tab_case",
+      "tab_photo",
+      "tab_search"
+    ],
+    "core.py": [
+      "group"
+    ],
+    "rag_engine.py": [
+      "p"
+    ],
+    "report_builder.py": [],
+    "scene_map.py": [],
+    "vision_agent.py": []
+  }
+}
