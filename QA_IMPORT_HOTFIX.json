@@ -1,0 +1,24 @@
+{
+  "compiled_files": [
+    "app.py",
+    "core.py",
+    "rag_engine.py",
+    "report_builder.py",
+    "scene_map.py",
+    "ui.py",
+    "vision_agent.py"
+  ],
+  "checks": {
+    "all_python_files_compile": true,
+    "no_ui_import_in_app": true,
+    "apply_ui_embedded": true,
+    "hero_embedded": true,
+    "progress_rail_embedded": true,
+    "evidence_card_embedded": true,
+    "right_rail_css_present": true,
+    "vision_import_unchanged": true,
+    "scene_type_passed_to_vision": true,
+    "single_page_workflow": true
+  },
+  "all_checks_passed": true
+}
