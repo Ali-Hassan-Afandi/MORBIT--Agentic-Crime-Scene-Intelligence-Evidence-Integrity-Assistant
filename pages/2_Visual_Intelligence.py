@@ -3,7 +3,7 @@ from core import init_state
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
 st.set_page_config(page_title="Visual Intelligence | MORBIT CSI CaseAssistant", page_icon="📷", layout="wide")
-apply_ui(); init_state(); case_sidebar()
+apply_ui(); init_state(); case_sidebar(active_step=2)
 hero("Visual Intelligence", "Review image-analysis outputs and verify only observations you are prepared to adopt as investigator-confirmed scene context.")
 render_workflow(active_step=2)
 
@@ -26,15 +26,33 @@ else:
 
         if not a.get("image_summary"):
             st.warning("The photograph is saved, but visual AI analysis is not yet available. Return to the dashboard to retry analysis; re-upload is not required.")
-        st.markdown("**Human verification**")
-        for j,obs in enumerate(a.get("potential_observations",[])):
+        if a.get("scene_zones_reviewed"):
+            st.caption("Systematic sweep: " + " • ".join(a["scene_zones_reviewed"]))
+        if a.get("coverage_note"):
+            st.info("Coverage note: " + a["coverage_note"])
+
+        observations = a.get("potential_observations", [])
+        st.markdown(f"### Human Verification — {len(observations)} AI-Proposed Candidate(s)")
+        st.caption("Tick only the visible observations you are prepared to adopt as investigator-verified context.")
+
+        for j,obs in enumerate(observations):
             key=f"verify_{rec['image_id']}_{j}"
-            checked=st.checkbox(
-                f"{obs.get('observation','')} — {obs.get('confidence','unspecified')} confidence",
-                key=key,
-            )
-            if checked:
-                verified.append(f"{rec['image_id']}: {obs.get('observation','')}")
+            with st.container(border=True):
+                st.markdown(f"**{j+1}. {obs.get('observation','')}**")
+                m1,m2,m3=st.columns(3)
+                m1.caption("Location: " + (obs.get("location_in_image","") or "Not specified"))
+                m2.caption("Category: " + obs.get("possible_category","other"))
+                m3.caption("AI confidence: " + obs.get("confidence","unspecified"))
+                if obs.get("reason"):
+                    st.caption("Why it may warrant documentation: " + obs.get("reason",""))
+                checked=st.checkbox("Investigator verifies this visible observation", key=key)
+                if checked:
+                    location = obs.get("location_in_image","")
+                    verified.append(
+                        f"{rec['image_id']}: {obs.get('observation','')}"
+                        + (f" [visible location: {location}]" if location else "")
+                    )
+
         if a.get("limitations"):
             st.caption("Limitations: "+"; ".join(a["limitations"]))
         st.divider()

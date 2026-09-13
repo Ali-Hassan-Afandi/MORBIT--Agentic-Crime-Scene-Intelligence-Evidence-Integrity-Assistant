@@ -249,6 +249,7 @@ def init_state() -> None:
         "intake_saved": False,
         "photo_1_filename": "",
         "confirm_full_clear": False,
+        "evidence_checklist_saved": False,
     }
 
     for key, value in defaults.items():
@@ -609,12 +610,16 @@ def case_snapshot() -> dict[str, Any]:
 
 
 def workflow_status() -> list[dict[str, Any]]:
-    evidence_ready = st.session_state.evidence_df is not None and not st.session_state.evidence_df.empty
+    visual_done = False
+    if st.session_state.vision_records:
+        analysis = st.session_state.vision_records[0].get("analysis", {})
+        visual_done = bool(analysis.get("image_summary"))
+
     return [
-        {"step": 1, "label": "Case Intake", "done": bool(st.session_state.case_id and st.session_state.desc)},
-        {"step": 2, "label": "Visual Review", "done": bool(st.session_state.vision_records) or st.session_state.analysis_complete},
+        {"step": 1, "label": "Case Intake", "done": bool(st.session_state.get("intake_saved", False))},
+        {"step": 2, "label": "Visual Review", "done": visual_done},
         {"step": 3, "label": "Agentic Analysis", "done": bool(st.session_state.scene_analysis)},
         {"step": 4, "label": "Search & Scene Map", "done": bool(st.session_state.search_plan and st.session_state.scene_map_png)},
-        {"step": 5, "label": "Evidence Integrity", "done": bool(evidence_ready)},
+        {"step": 5, "label": "Evidence Integrity", "done": bool(st.session_state.get("evidence_checklist_saved", False))},
         {"step": 6, "label": "Rich Report", "done": bool(st.session_state.report_docx)},
     ]

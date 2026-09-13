@@ -9,7 +9,7 @@ from scene_map import generate_scene_map
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
 st.set_page_config(page_title="Search & Scene Map | MORBIT CSI CaseAssistant",page_icon="🧭",layout="wide")
-apply_ui(); init_state(); case_sidebar()
+apply_ui(); init_state(); case_sidebar(active_step=4)
 
 hero(
     "Search Strategy & Scene of Crime Map",

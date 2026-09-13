@@ -4,7 +4,7 @@ from core import init_state, integrity_score, normalize_evidence_checklist
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
 st.set_page_config(page_title="Evidence Integrity | MORBIT CSI CaseAssistant",page_icon="🔐",layout="wide")
-apply_ui(); init_state(); case_sidebar()
+apply_ui(); init_state(); case_sidebar(active_step=5)
 
 hero(
     "Evidence Integrity",
@@ -53,7 +53,9 @@ else:
 
     if save:
         st.session_state.evidence_df = normalize_evidence_checklist(edited)
-        st.success("Evidence checklist saved.")
+        st.session_state.evidence_checklist_saved = True
+        st.session_state.report_docx = None
+        st.success("Evidence checklist saved. Workflow tracker updated.")
 
     # Always calculate from the last saved dataframe.
     saved = normalize_evidence_checklist(st.session_state.evidence_df)

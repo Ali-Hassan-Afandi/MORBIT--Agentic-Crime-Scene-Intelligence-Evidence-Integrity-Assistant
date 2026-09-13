@@ -4,7 +4,7 @@ from report_builder import build_rich_report
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
 st.set_page_config(page_title="Rich Report | MORBIT CSI CaseAssistant",page_icon="📄",layout="wide")
-apply_ui(); init_state(); case_sidebar()
+apply_ui(); init_state(); case_sidebar(active_step=6)
 hero("Final Rich Word Report","Generate a visually formatted DOCX containing the complete case workflow.")
 render_workflow(active_step=6)
 

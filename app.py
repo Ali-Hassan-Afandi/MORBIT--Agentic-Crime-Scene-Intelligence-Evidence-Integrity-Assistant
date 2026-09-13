@@ -8,7 +8,7 @@ from core import (
     knowledge_inventory, workflow_status, sync_map_items_with_evidence
 )
 from vision_agent import analyze_image, image_metadata
-from ui import apply_ui, hero, render_workflow
+from ui import apply_ui, hero, render_workflow, case_sidebar
 
 st.set_page_config(
     page_title=APP_NAME,
@@ -18,6 +18,7 @@ st.set_page_config(
 )
 apply_ui()
 init_state()
+case_sidebar(active_step=st.session_state.current_step)
 
 hero(
     "Case Command Dashboard",
@@ -213,6 +214,7 @@ if save_intake:
         st.session_state.analysis_started = False
         st.session_state.analysis_complete = False
         st.session_state.analysis_errors = []
+        st.session_state.evidence_checklist_saved = False
         st.session_state.photo_1_filename = ""
         st.session_state["intake_saved"] = True
         st.session_state.current_step = 1
@@ -317,17 +319,34 @@ else:
             st.markdown("#### Immediate Findings & Recommendations")
             st.write(analysis.get("image_summary", ""))
 
+            evidence_count = len(analysis.get("potential_observations", []))
+            z1, z2 = st.columns(2)
+            z1.metric("Potential visual evidence", evidence_count)
+            z2.metric("Scene zones reviewed", len(analysis.get("scene_zones_reviewed", [])))
+
+            if analysis.get("scene_zones_reviewed"):
+                st.caption("Systematic sweep: " + " • ".join(analysis["scene_zones_reviewed"]))
+
             for item in analysis.get("documentation_suggestions", []):
                 st.info("Recommendation: " + item)
 
-            with st.expander("Potential visual observations"):
-                for obs in analysis.get("potential_observations", []):
-                    st.write(
-                        f"• {obs.get('observation','')} "
-                        f"({obs.get('confidence','unspecified')} confidence; "
-                        f"{obs.get('possible_category','other')})"
+            with st.expander(f"Potential visual evidence candidates ({evidence_count})", expanded=True):
+                for idx, obs in enumerate(analysis.get("potential_observations", []), start=1):
+                    st.markdown(
+                        f"""<div class="evidence-card">
+                        <b>{idx}. {obs.get('observation','')}</b>
+                        <div class="evidence-meta">
+                        📍 {obs.get('location_in_image','Location not specified')} &nbsp; • &nbsp;
+                        {obs.get('possible_category','other')} &nbsp; • &nbsp;
+                        {obs.get('confidence','unspecified')} confidence
+                        </div>
+                        <div class="evidence-meta">{obs.get('reason','')}</div>
+                        </div>""",
+                        unsafe_allow_html=True,
                     )
 
+            if analysis.get("coverage_note"):
+                st.caption("Coverage note: " + analysis["coverage_note"])
             if analysis.get("limitations"):
                 st.caption("Limitations: " + "; ".join(analysis["limitations"]))
         else:

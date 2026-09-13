@@ -6,7 +6,7 @@ from core import (
 from ui import apply_ui, hero, case_sidebar, render_workflow
 
 st.set_page_config(page_title="Agentic Analysis | MORBIT CSI CaseAssistant", page_icon="🧠", layout="wide")
-apply_ui(); init_state(); case_sidebar()
+apply_ui(); init_state(); case_sidebar(active_step=3)
 hero("Agentic Analysis", "Refresh and review the multimodal scene analysis after human visual verification.")
 render_workflow(active_step=3)
 
@@ -29,6 +29,8 @@ if st.button("Refresh MORBIT Analysis with Verified Visuals",type="primary",use_
     st.session_state.guidance=guidance
     st.session_state.sources=sources
     st.session_state.evidence_df=evidence_dataframe(analysis)
+    st.session_state.evidence_checklist_saved=False
+    st.session_state.report_docx=None
     st.session_state.map_items=sync_map_items_with_evidence(st.session_state.map_items, st.session_state.evidence_df)
     st.session_state.scene_map_png=None
     st.success("Analysis refreshed. The site-plan table has also been synchronized with the latest evidence list.")

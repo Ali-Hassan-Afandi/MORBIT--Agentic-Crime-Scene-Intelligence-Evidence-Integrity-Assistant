@@ -1,0 +1,34 @@
+{
+  "compiled_files": [
+    "app.py",
+    "core.py",
+    "rag_engine.py",
+    "report_builder.py",
+    "scene_map.py",
+    "ui.py",
+    "vision_agent.py",
+    "pages/1_Scene_Intake.py",
+    "pages/2_Visual_Intelligence.py",
+    "pages/3_Agentic_Analysis.py",
+    "pages/4_Search_and_Scene_Map.py",
+    "pages/5_Evidence_Integrity.py",
+    "pages/6_Rich_Report.py"
+  ],
+  "checks": {
+    "python_compile_all": true,
+    "single_photo_workflow_preserved": true,
+    "vision_up_to_10_candidates": true,
+    "vision_systematic_sweep": true,
+    "vision_locations": true,
+    "vision_coverage_note": true,
+    "primary_output_under_1000": true,
+    "sidebar_workflow_tracker": true,
+    "sidebar_quick_navigation": true,
+    "dashboard_sidebar_enabled": true,
+    "all_pages_sidebar_active": true,
+    "accurate_visual_completion": true,
+    "checklist_completion_state": true,
+    "no_visible_v5_runtime": true
+  },
+  "all_checks_passed": true
+}
