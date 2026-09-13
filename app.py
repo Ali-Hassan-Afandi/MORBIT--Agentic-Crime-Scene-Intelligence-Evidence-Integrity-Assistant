@@ -418,65 +418,42 @@ def progress_rail():
             icon = "○"
             state_text = "Pending"
 
+        # IMPORTANT: keep HTML flush-left/minified. Leading indentation can make
+        # Markdown render the HTML as a code block inside Streamlit.
         step_html.append(
-            f"""
-            <div class="rail-step {css_class}">
-              <div class="rail-step-title">
-                <span class="rail-mobile-icon">{icon}</span>
-                {item['step']}. {html.escape(item['label'])}
-              </div>
-              <div class="rail-step-status">
-                {state_text}
-              </div>
-            </div>
-            """
+            f'<div class="rail-step {css_class}">'
+            f'<div class="rail-step-title">'
+            f'<span class="rail-mobile-icon">{icon}</span> '
+            f'{item["step"]}. {html.escape(item["label"])}'
+            f'</div>'
+            f'<div class="rail-step-status">{state_text}</div>'
+            f'</div>'
         )
 
     case_id = html.escape(str(st.session_state.case_id))
     scene_type = html.escape(str(st.session_state.scene_type))
 
-    st.markdown(
-        f"""
-        <div class="morbit-right-rail">
-          <div class="rail-title">
-            🛡️ Case Progress
-          </div>
-          <div class="rail-sub">
-            Permanent guided workflow tracker
-          </div>
-
-          <div class="rail-summary">
-            <div class="rail-metric">
-              <b>{done}/6</b>
-              <span>Functions complete</span>
-            </div>
-            <div class="rail-metric">
-              <b>{evidence_count}</b>
-              <span>Evidence rows</span>
-            </div>
-          </div>
-
-          <div class="rail-progress-bg">
-            <div
-              class="rail-progress-fill"
-              style="width:{pct}%"
-            ></div>
-          </div>
-
-          <div class="rail-steps">
-            {''.join(step_html)}
-          </div>
-
-          <div class="rail-case">
-            <b>Case:</b> {case_id}<br>
-            <b>Scene:</b> {scene_type}<br>
-            AI visual findings remain proposals until investigator verification.
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    rail_html = (
+        '<div class="morbit-right-rail">'
+        '<div class="rail-title">🛡️ Case Progress</div>'
+        '<div class="rail-sub">Permanent guided workflow tracker</div>'
+        '<div class="rail-summary">'
+        f'<div class="rail-metric"><b>{done}/6</b><span>Functions complete</span></div>'
+        f'<div class="rail-metric"><b>{evidence_count}</b><span>Evidence rows</span></div>'
+        '</div>'
+        '<div class="rail-progress-bg">'
+        f'<div class="rail-progress-fill" style="width:{pct}%"></div>'
+        '</div>'
+        f'<div class="rail-steps">{"".join(step_html)}</div>'
+        '<div class="rail-case">'
+        f'<b>Case:</b> {case_id}<br>'
+        f'<b>Scene:</b> {scene_type}<br>'
+        'AI visual findings remain proposals until investigator verification.'
+        '</div>'
+        '</div>'
     )
 
+    st.markdown(rail_html, unsafe_allow_html=True)
 
 def evidence_card(obs: dict):
     rank = obs.get("priority_rank", "")

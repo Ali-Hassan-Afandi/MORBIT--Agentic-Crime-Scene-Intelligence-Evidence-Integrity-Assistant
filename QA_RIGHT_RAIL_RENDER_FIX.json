@@ -1,0 +1,22 @@
+{
+  "compiled": {
+    "app.py": true,
+    "core.py": true,
+    "vision_agent.py": true,
+    "rag_engine.py": true,
+    "report_builder.py": true,
+    "scene_map.py": true
+  },
+  "checks": {
+    "all_runtime_files_compile": true,
+    "workflow_status_import_present": true,
+    "progress_rail_defined": true,
+    "rail_html_minified": true,
+    "no_indented_step_html_template": true,
+    "right_rail_css_preserved": true,
+    "responsive_bottom_mode_preserved": true,
+    "vision_body_first_preserved": true,
+    "vision_max_five_preserved": true
+  },
+  "all_checks_passed": true
+}
